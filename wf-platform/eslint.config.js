@@ -76,7 +76,7 @@ export default [
       "vue/multi-word-component-names": [
         "error",
         {
-          ignores: ["index", "DefaultLayout", "AuthLayout"],
+          ignores: ["index", "DefaultLayout", "AuthLayout", "404", "board"],
         },
       ],
 
