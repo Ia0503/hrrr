@@ -207,6 +207,13 @@ class WebSocketManager {
       return;
     }
 
+    /** 未配置 WS 服务地址时直接跳过，不发起无意义的连接尝试 */
+    if (!url || url === "undefined" || url.trim() === "") {
+      console.warn("[ws] ⚠️ WebSocket URL 未配置 (VITE_WS_URL)，跳过连接");
+      this.status.value = ConnectionStatus.DISCONNECTED;
+      return Promise.resolve();
+    }
+
     // 更新状态为"正在连接"
     this.status.value = ConnectionStatus.CONNECTING;
     this.serverUrl = url;

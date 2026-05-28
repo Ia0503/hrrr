@@ -61,11 +61,12 @@ const isCollapse = ref(false);
 
 /**
  * 过滤后的可见菜单列表
- * 从 userStore.menuList 中过滤掉 hidden 为 true 的菜单项
+ * 从 userStore.userInfo?.menuList 中过滤掉 hidden 为 true 的菜单项
  * 仅展示用户有权限访问的菜单
  */
 const visibleMenuList = computed(() => {
-  const filtered = userStore.menuList.filter(
+  const menuList = userStore.userInfo?.menuList || [];
+  const filtered = menuList.filter(
     (item) => item.meta.hidden !== true,
   );
   console.log("[DefaultLayout] 可见菜单列表:", filtered);

@@ -54,12 +54,22 @@ const ROUTER_BASE_PATH = "/";
  *   - 业务页面通过动态路由按需加载（根据用户权限）
  */
 const staticRoutes: RouteRecordRaw[] = [
+  // ==================== 根路径重定向 ====================
+  /**
+   * 根路径重定向到仪表盘
+   * 访问 http://localhost:5177/ 时自动跳转到 /dashboard
+   */
+  {
+    path: "/",
+    redirect: "/dashboard",
+  },
+
   // ==================== 登录页路由 ====================
   {
     /**
      * 登录页路由配置
-     * 路径: /login
-     * 组件: views/login/index.vue
+     * 路径：/login
+     * 组件：views/login/index.vue
      *
      * 元信息说明：
      *   - title: 页面标题（用于浏览器标签、面包屑等）
@@ -83,15 +93,15 @@ const staticRoutes: RouteRecordRaw[] = [
    *   2. 或者在 main.ts 中 router 守卫初始化之后添加
    *
    * 404 路由配置示例（供参考）：
-   * {
-   *   path: '/:pathMatch(.*)*',
-   *   name: 'NotFound',
-   *   component: () => import('@/views/error/404.vue'),
-   *   meta: {
-   *     title: '页面未找到',
-   *     hidden: true,
+   *   {
+   *     path: '/:pathMatch(.*)*',
+   *     name: 'NotFound',
+   *     component: () => import('@/views/error/404.vue'),
+   *     meta: {
+   *       title: '页面未找到',
+   *       hidden: true,
+   *     },
    *   },
-   * },
    */
 ];
 

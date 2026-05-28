@@ -71,6 +71,13 @@ onUnmounted(() => {
 function initWebSocket(): void {
   const wsManager = getWebSocketManager();
 
+  /** 未配置 WebSocket 服务地址时跳过连接 */
+  const wsUrl = import.meta.env.VITE_WS_URL;
+  if (!wsUrl || wsUrl === "undefined" || !wsUrl.trim()) {
+    console.log("[board] ⏭️ WebSocket 未配置，跳过初始化（离线模式）");
+    return;
+  }
+
   if (wsManager.connected) {
     wsConnected.value = true;
     taskStore.initSocketListeners();
@@ -110,20 +117,22 @@ function cleanupWebSocket(): void {
  * @param evt - vue-draggable-plus 提供的拖拽事件对象
  */
 async function onDragEnd(evt: any): Promise<void> {
-  /* 如果没有跨列移动则忽略 */
+  /* 如果没有实际移动则忽略（同位置放下） */
   if (evt.from === evt.to && evt.oldIndex === evt.newIndex) return;
 
-  const taskId = String(evt.item.dataset.id || "");
+  /* dataset.id 返回字符串，mock 数据中 id 为数字，需统一转换为数字 */
+  const taskId = Number(evt.item.dataset.id) || evt.item.dataset.id;
+  const fromColumnId = (evt.from.closest(".wf-board-column") as HTMLElement)?.dataset?.columnId || "";
   const toColumnId = (evt.to.closest(".wf-board-column") as HTMLElement)?.dataset?.columnId || "";
-  const newIndex = evt.newIndex;
 
   console.log(
-    `[board] 🚀 检测到跨列/跨位置拖拽: ` +
-    `taskId=${taskId}, 目标列=${toColumnId}, 新位置=${newIndex}`,
+    `[board] 🚀 拖拽完成: taskId=${taskId} (${typeof taskId}), ` +
+    `从[${fromColumnId}] → 到[${toColumnId}], 位置 ${evt.oldIndex} → ${evt.newIndex}`,
   );
 
   try {
-    await taskStore.moveTask(taskId, toColumnId, newIndex);
+    await taskStore.moveTask({ taskId, fromColumnId, toColumnId, newIndex: evt.newIndex });
+    ElMessage.success("任务已移动");
   } catch (error) {
     console.error("[board] 拖拽操作处理失败:", error);
     ElMessage.error("任务移动失败，请重试");
@@ -209,30 +218,20 @@ function openCreateDialog(): void {
 
 /**
  * 新建任务弹窗提交回调
- * 调用创建接口 → 成功后写入 taskStore → 看板立即显示新任务
- * 刷新页面后重新请求看板数据时，mock 会从内存中返回该任务
+ * 委托给 taskStore.addTask() 统一处理：
+ *   1. 调用后端 API 持久化（获取服务端 ID）
+ *   2. 成功后将返回数据写入本地 store，看板立即显示
+ *   3. API 失败时抛出错误，由此处 catch 处理提示
  */
 const handleTaskFormSubmit = async (data: Record<string, unknown>) => {
   console.log("[board] 📝 收到新建任务提交数据:", JSON.stringify(data, null, 2));
 
   try {
-    /* @mock 调用创建任务接口，将数据持久化到 mock 内存存储 */
-    const res = await request.post("/api/task/create", data);
-    const createdTask = res.data.data;
-
-    console.log(`[board] ✅ 接口返回: id=${createdTask.id}, title="${createdTask.title}"`);
-
-    /* 将接口返回的完整任务数据写入 store，新任务立即出现在看板对应列中 */
-    taskStore.addTask(createdTask as Record<string, unknown>);
-
+    await taskStore.addTask(data);
     ElMessage.success(`任务 "${String(data.title || "未命名")}" 创建成功！`);
   } catch (error) {
     console.error("[board] ❌ 创建任务失败:", error);
-
-    /* 接口失败时的降级方案：仍然写入本地 store（仅本次会话有效） */
-    console.warn("[board] ⚠️ 降级处理：任务仅添加到本地（刷新后将丢失）");
-    taskStore.addTask(data);
-    ElMessage.warning("任务已创建（离线模式），刷新页面后可能丢失");
+    ElMessage.error("创建失败，请重试");
   }
 };
 </script>
@@ -288,13 +287,12 @@ const handleTaskFormSubmit = async (data: Record<string, unknown>) => {
              需要在插槽内部自行 v-for 遍历 column.taskList，SortableJS 会自动让子元素可拖拽 -->
         <VueDraggable
           v-model="column.taskList"
-          group="tasks"
+          :group="{ name: 'tasks', pull: true, put: true }"
           class="wf-board-column__list"
           item-key="id"
           :animation="200"
           ghost-class="wf-task-card--ghost"
           drag-class="wf-task-card--drag"
-          handle=".wf-task-card__handle"
           @end="onDragEnd"
         >
           <article

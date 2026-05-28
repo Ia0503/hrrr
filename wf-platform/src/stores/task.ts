@@ -145,76 +145,73 @@ export const useTaskStore = defineStore("task", () => {
    * });
    * ```
    */
+  /**
+   * 移动任务到目标列（跨列拖拽场景）
+   *
+   * ⚠️ 重要：此函数不由 VueDraggable 的 v-model 自动触发。
+   *   VueDraggable 通过 v-model="column.taskList" 已经完成了数组的跨列移动，
+   *   本函数只需在此基础上补充：更新 status 字段 + 调后端持久化 + 失败回滚。
+   *
+   * @param params - 拖拽移动参数
+   * @param params.taskId       - 被拖拽任务的 ID
+   * @param params.fromColumnId - 来源列的 ID（用于回滚定位）
+   * @param params.toColumnId   - 目标列的 ID
+   * @param params.newIndex     - 在目标列中的插入位置索引
+   * @throws API 失败时抛出错误，并已自动回滚本地状态
+   */
   async function moveTask(params: {
     taskId: number | string;
     fromColumnId: string;
     toColumnId: string;
     newIndex: number;
   }): Promise<void> {
-    const { taskId, fromColumnId, toColumnId, newIndex } = params;
+    const { taskId, toColumnId } = params;
 
     console.log(
-      `[task-store] 🚀 开始移动任务 [${taskId}] ` +
-      `从 [${fromColumnId}] → [${toColumnId}]，目标位置索引: ${newIndex}`,
+      `[task-store] 🚀 持久化任务移动 [${taskId}] → [${toColumnId}]`,
     );
 
-    /* 步骤一：创建快照备份（用于可能的回滚）
-     * 使用 JSON.parse(JSON.stringify()) 进行深拷贝：
-     * - 兼容性好：无需 polyfill，所有现代浏览器均支持
-     * - 对于纯数据对象（无函数、Date、RegExp 等）足够可靠
-     * - 本项目 TaskItem / BoardColumn 均为纯数据结构，适合此方案
-     * 如需处理复杂对象可替换为 structuredClone()
-     */
+    /* 步骤一：创建快照备份（VueDraggable 已通过 v-model 修改了数组，需快照用于可能的回滚）*/
     boardSnapshot = JSON.parse(JSON.stringify(boardColumns.value)) as BoardColumn[];
 
     try {
-      /* 步骤二：在来源列中定位并移除任务 */
-      const sourceCol = boardColumns.value.find((col) => col.id === fromColumnId);
-      if (!sourceCol) {
-        throw new Error(`[task-store] 未找到来源列: ${fromColumnId}`);
+      /* 步骤二：在当前已更新的数组中找到被移动的任务，更新其 status 字段 */
+      let movedTask: TaskItem | undefined;
+      for (const col of boardColumns.value) {
+        const found = col.taskList.find((t) => t.id === taskId);
+        if (found) {
+          movedTask = found;
+          break;
+        }
       }
 
-      const taskIndex = sourceCol.taskList.findIndex((t) => t.id === taskId);
-      if (taskIndex === -1) {
-        throw new Error(`[task-store] 未在来源列中找到任务: ${taskId}`);
+      if (!movedTask) {
+        throw new Error(`[task-store] 未找到任务: ${taskId}`);
       }
 
-      const [movedTask] = sourceCol.taskList.splice(taskIndex, 1);
-      console.log(`[task-store] 📤 已从来源列 [${fromColumnId}] 移除任务 [${taskId}]`);
-
-      /* 步骤三：将任务插入目标列的指定位置 */
-      const targetCol = boardColumns.value.find((col) => col.id === toColumnId);
-      if (!targetCol) {
-        throw new Error(`[task-store] 未找到目标列: ${toColumnId}`);
-      }
-
-      targetCol.taskList.splice(newIndex, 0, movedTask);
-      movedTask.status = toColumnId; // 同步更新任务的状态字段
+      const oldStatus = movedTask.status;
+      movedTask.status = toColumnId;
 
       console.log(
-        `[task-store] 📥 已将任务 [${taskId}] 插入目标列 [${toColumnId}] 的位置 ${newIndex}`,
+        `[task-store] 📝 任务 [${taskId}] 状态: ${oldStatus} → ${toColumnId}`,
       );
 
-      /* 步骤四：调用后端接口持久化变更 */
+      /* 步骤三：调用后端接口持久化变更 */
       await request.post("/api/task/update", {
         taskId,
         newStatus: toColumnId,
-        newIndex,
+        newIndex: params.newIndex,
       });
 
-      console.log(`[task-store] ✅ 任务 [${taskId}] 移动成功，后端已确认`);
+      console.log(`[task-store] ✅ 任务 [${taskId}] 移动已持久化`);
     } catch (error) {
-      /* 步骤五：API 失败 → 回滚到快照状态 */
+      /* 步骤四：API 失败 → 回滚到快照状态（恢复 VueDraggable 修改前的数组）*/
       if (boardSnapshot !== null) {
         boardColumns.value = JSON.parse(JSON.stringify(boardSnapshot)) as BoardColumn[];
-        console.warn(
-          "[task-store] ⚠️ 拖拽更新失败，已回滚数据",
-          error,
-        );
+        console.warn("[task-store] ⚠️ 持久化失败，已回滚数据", error);
       }
       throw error;
     } finally {
-      // 操作完成后清除快照，释放内存引用
       boardSnapshot = null;
     }
   }
@@ -252,54 +249,42 @@ export const useTaskStore = defineStore("task", () => {
   /**
    * 新增任务到看板（从 SchemaForm 提交的数据创建）
    *
-   * 将表单提交数据转换为 TaskItem 对象，并追加到指定状态列的任务列表末尾。
-   * 新任务默认添加到表单中 status 字段指定的列，若未指定则默认放入 "todo" 列。
+   * 持久化策略：与 moveTask 保持一致
+   *   1. 先调用后端 API 创建任务（获取服务端生成的 ID）
+   *   2. 成功后将返回的任务数据追加到本地对应列
+   *   3. API 失败时提示用户，不修改本地状态
    *
    * @param formData - SchemaForm 提交的表单数据（字段名→值映射）
-   *
-   * @example
-   * ```ts
-   * taskStore.addTask({
-   *   title: "新任务",
-   *   priority: "high",
-   *   assignee: "zhangsan",
-   *   status: "todo",
-   * });
-   * ```
+   * @returns Promise<void>
    */
-  function addTask(formData: Record<string, unknown>): void {
-    /* 生成唯一 ID：使用时间戳 + 随机数避免冲突 */
-    const newId = `task_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-
-    /* 确定目标列：优先使用表单中的 status，默认 "todo" */
+  async function addTask(formData: Record<string, unknown>): Promise<void> {
+    /* 确定目标列 */
     const targetStatus = (formData.status as string) || "todo";
     const targetColumn = boardColumns.value.find((col) => col.id === targetStatus);
 
     if (!targetColumn) {
-      console.error(`[task-store] ❌ addTask: 未找到目标列 [${targetStatus}]，无法添加任务`);
-      return;
+      console.error(`[task-store] ❌ addTask: 未找到目标列 [${targetStatus}]`);
+      throw new Error(`未找到目标列: ${targetStatus}`);
     }
 
-    /* 构建新的 TaskItem 对象 */
-    const newTask: TaskItem = {
-      id: newId,
-      title: String(formData.title || "未命名任务"),
-      description: formData.description as string | undefined,
-      status: targetStatus,
-      priority: (formData.priority as TaskPriority) || "medium",
-      assignee: formData.assignee as string | undefined,
-      tags: (formData.tags as string[]) || undefined,
-      createdAt: new Date().toISOString(),
-      orderIndex: targetColumn.taskList.length,
-    };
+    console.log(`[task-store] 🚀 开始创建任务: "${formData.title}" → [${targetStatus}]`);
 
-    /* 追加到目标列的任务列表末尾 */
-    targetColumn.taskList.push(newTask);
+    try {
+      /* 调用创建接口，由后端/Mock 生成 ID 并持久化 */
+      const res = await request.post("/api/task/create", formData);
+      const newTask = res as TaskItem;
 
-    console.log(
-      `[task-store] ✅ 新任务已添加到列 [${targetStatus}]: ` +
-      `"${newTask.title}" (id=${newId}, 共${targetColumn.taskList.length}个任务)`,
-    );
+      /* 将服务端返回的完整任务对象追加到本地对应列 */
+      targetColumn.taskList.push(newTask);
+
+      console.log(
+        `[task-store] ✅ 任务已创建并持久化: id=${newTask.id}, title="${newTask.title}" ` +
+        `(列 [${targetStatus}] 现有 ${targetColumn.taskList.length} 个任务)`,
+      );
+    } catch (error) {
+      console.error("[task-store] ❌ 任务创建失败:", error);
+      throw error;
+    }
   }
 
   /* ============================================================
