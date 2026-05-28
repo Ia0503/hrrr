@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node -e \"const{execSync}=require('child_process');try{const p=execSync('netstat -ano | findstr :5177',{encoding:'utf8'}).match(/LISTENING\\s+(\\d+)/);if(p){process.stdout.write(`[dev] 检测到旧实例 PID ${p[1]}，正在关闭...\\n`);execSync(`taskkill /PID ${p[1]} /F`,{encoding:'utf8'});process.stdout.write('[dev] 已释放端口 5177\\n')}}catch{}\" && vite",
     "build": "vue-tsc -b && vite build",
     "preview": "vite preview",
     "lint": "eslint . --fix",
