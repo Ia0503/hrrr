@@ -24,6 +24,7 @@ import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import router from "@/router";
 import request from "@/utils/request";
+import { AuditModule, AuditAction } from "@/types/log";
 
 // ==================== 类型定义 ====================
 
@@ -108,8 +109,15 @@ const REFRESH_TOKEN_KEY = "wf_refresh_token";
 export const useUserStore = defineStore("user", () => {
   // ==================== State（响应式状态）====================
 
-  /** 访问令牌（JWT Token），用于身份验证 */
-  const token = ref<string>("");
+  /** 访问令牌（JWT Token），用于身份验证（从 localStorage 恢复以支持刷新持久化）
+   *  使用 try-catch 防止沙箱 iframe / 隐身模式等受限环境下 localStorage 访问被拒绝导致 Store 初始化崩溃 */
+  let tokenValue = "";
+  try {
+    tokenValue = localStorage.getItem(TOKEN_KEY) || "";
+  } catch (_storageError) {
+    console.warn("[user-store] [WARN] localStorage 不可用，Token 将不持久化");
+  }
+  const token = ref<string>(tokenValue);
 
   /** 用户详细信息对象，包含角色、权限、菜单等 */
   const userInfo = ref<UserInfo | null>(null);
@@ -212,6 +220,25 @@ export const useUserStore = defineStore("user", () => {
       console.log(
         `[user-store] [INFO] 登录成功: token=${response.accessToken.substring(0, 12)}...`,
       );
+
+      // ====== 审计日志：记录登录行为 ======
+      try {
+        const { useAuditLog } = await import("@/composables/useAuditLog");
+        const { addLog } = useAuditLog();
+        await addLog({
+          module: AuditModule.AUTH,
+          action: AuditAction.LOGIN,
+          method: "POST",
+          url: "/api/login",
+          params: { username: loginForm.username },
+          status: "success",
+          username: loginForm.username,
+          userId: userInfo.value?.id ?? null,
+        });
+      } catch (_logError) {
+        /* 日志记录失败不影响登录流程 */
+        console.error("[user-store] [ERROR] 登录审计日志记录失败:", _logError);
+      }
     } catch (error: unknown) {
       // 记录详细的错误信息
       console.error("[user-store] [ERROR] 登录失败:", error);
@@ -315,6 +342,30 @@ export const useUserStore = defineStore("user", () => {
     isDynamicRoutesAdded.value = false;
 
     console.log("[user-store] [INFO] 登出完成，已清除所有用户状态");
+
+    // ====== 审计日志：记录登出行为（非阻塞，fire-and-forget）=====
+    /* 注意：此时 Token 和 userInfo 已清除，需在清除前缓存用户名
+     * logout() 是同步函数，不能使用 await，改用 .then().catch() 链式调用 */
+    const logoutUsername = userInfo.value?.username ?? "unknown";
+    const logoutUserId = userInfo.value?.id ?? null;
+    import("@/composables/useAuditLog")
+      .then(({ useAuditLog }) => {
+        const { addLog } = useAuditLog();
+        return addLog({
+          module: AuditModule.AUTH,
+          action: AuditAction.LOGOUT,
+          method: "GET",
+          url: "/api/logout",
+          params: {},
+          status: "success",
+          username: logoutUsername,
+          userId: logoutUserId,
+        });
+      })
+      .catch((_logError) => {
+        /* 日志记录失败不影响登出流程 */
+        console.error("[user-store] [ERROR] 登出审计日志记录失败:", _logError);
+      });
 
     // 跳转到登录页（使用 replace 避免浏览器后退问题）
     router.push("/login");

@@ -372,6 +372,87 @@ instance.interceptors.response.use(
     // HTTP 层面成功，检查业务层状态码
     if (data.code === SUCCESS_CODE) {
       console.log(`[request] [INFO] 响应成功: ${method} ${url}`);
+
+      // ====== 审计日志自动采集（仅写操作）======
+      /* 仅对 POST/PUT/DELETE 且业务成功的请求自动记录审计日志
+       * 排除日志接口自身（防止递归死循环）
+       * 使用 Promise.resolve().then() 异步执行，不阻塞当前响应返回
+       * 动态 import 避免循环依赖（request.ts 被 stores 引用）
+       * 全链路 try-catch 确保日志失败不影响主业务流程 */
+      const WRITE_METHODS = new Set(["post", "put", "delete"]);
+      const currentMethod = response.config.method?.toLowerCase();
+      const urlPath = (response.config.url ?? "").split("?")[0];
+
+      /* 排除日志接口，防止 addLog → post(/api/system/log/add) → 拦截器 → addLog 无限递归 */
+      const AUDIT_EXCLUDE_URLS = ["/api/system/log/add", "/api/system/log/list"];
+
+      if (
+        WRITE_METHODS.has(currentMethod ?? "") &&
+        !AUDIT_EXCLUDE_URLS.some((excluded) => urlPath === excluded)
+      ) {
+        Promise.resolve().then(async () => {
+          try {
+            const { useAuditLog } = await import("@/composables/useAuditLog");
+            const { useUserStore } = await import("@/stores/user");
+            const { addLog } = useAuditLog();
+            const userStore = useUserStore();
+
+            /** 从 URL 推断所属模块（urlPath 已在外层提取）*/
+            let module = "system" as const;
+            if (
+              urlPath.startsWith("/api/login") ||
+              urlPath.startsWith("/api/refresh-token") ||
+              urlPath.startsWith("/api/getUserInfo")
+            ) {
+              module = "auth";
+            } else if (urlPath.startsWith("/api/user")) {
+              module = "user";
+            } else if (urlPath.startsWith("/api/task")) {
+              module = "task";
+            }
+
+            /** 将 HTTP 方法映射为 AuditAction */
+            const actionMap: Record<string, string> = {
+              post: "create",
+              put: "update",
+              delete: "delete",
+            };
+
+            /** 安全提取请求参数（兼容对象和字符串两种格式）*/
+            let requestData: Record<string, unknown> = {};
+            const rawData = response.config.data;
+            if (typeof rawData === "object" && rawData !== null) {
+              requestData = rawData as Record<string, unknown>;
+            } else if (typeof rawData === "string") {
+              try {
+                /* Axios 有时会将 data 序列化为字符串，尝试反序列化 */
+                requestData = JSON.parse(rawData);
+              } catch (_parseError) {
+                /* 解析失败则包装为原始字符串值 */
+                requestData = { _raw: rawData };
+              }
+            }
+
+            await addLog({
+              method: currentMethod?.toUpperCase() ?? "",
+              url: response.config.url ?? "",
+              params: requestData,
+              module,
+              action: actionMap[currentMethod ?? ""] ?? "query" as const,
+              userId: userStore.userInfo?.id ?? null,
+              username: userStore.userInfo?.username ?? "anonymous",
+              status: "success",
+            });
+          } catch (_auditError) {
+            /* 降级：审计日志写入失败静默处理 */
+            console.error(
+              "[request] [ERROR] 审计日志自动采集失败:",
+              _auditError,
+            );
+          }
+        });
+      }
+
       return Promise.resolve(data.data);
     }
 

@@ -357,6 +357,7 @@ const ADMIN_MENUS = [
   { name: "TaskBoard", path: "/task/board", component: "views/task/board", redirect: null, meta: { title: "任务看板", icon: "GridIcon", hidden: false }, children: [] },
   { name: "System", path: "/system", component: null, redirect: "/system/user", meta: { title: "系统管理", icon: "SettingIcon", hidden: false }, children: [
     { name: "UserManage", path: "/system/user", component: "views/system/user/index", meta: { title: "用户管理", icon: "UserIcon" }, children: [] as never[] },
+    { name: "AuditLog", path: "/system/log", component: "views/system/log/index", meta: { title: "审计日志", icon: "DocumentIcon" }, children: [] as never[] },
   ]},
 ];
 
@@ -1011,6 +1012,500 @@ export default [
       console.log(`[MOCK][INFO] 任务已删除: id=${removed.id}, title="${removed.title}" (剩余${taskStore.length})`);
 
       return { code: 0, data: { success: true, taskId }, message: "删除成功" };
+    },
+  } satisfies MockMethod,
+
+  // ================================================================
+  //  审计日志相关接口（2 个）
+  // ================================================================
+
+  /**
+   * @mock 记录审计日志
+   * 接收前端上报的日志数据，打印到控制台并返回成功
+   *
+   * 正式对接后端时：替换为真实 HTTP 请求到后端日志采集服务
+   */
+  {
+    url: "/api/system/log/add",
+    method: "post",
+
+    response: ({ body }: { body?: Record<string, unknown> }) => {
+      console.log(
+        `[MOCK] [INFO] 收到审计日志记录:`,
+        JSON.stringify(body).substring(0, 300),
+      );
+      return { code: 0, data: null, message: "日志记录成功" };
+    },
+  } satisfies MockMethod,
+
+  /**
+   * @mock 获取审计日志列表
+   * 支持分页和多维度筛选，返回模拟的审计日志数据
+   *
+   * 正式对接后端时：替换为真实后端分页查询接口
+   */
+  {
+    url: "/api/system/log/list",
+    method: "get",
+
+    response: ({ query }: { query?: Record<string, string> }) => {
+      const page = Number(query?.page ?? "1");
+      const pageSize = Number(query?.pageSize ?? "20");
+      const module = query?.module;
+      const action = query?.action;
+      const username = query?.username;
+      const status = query?.status;
+      const startTime = query?.startTime;
+      const endTime = query?.endTime;
+
+      /* 预设模拟审计日志数据（覆盖过去 7 天的各种操作场景）*/
+      const presetLogs = [
+        {
+          id: "log_001",
+          userId: 100,
+          username: "admin",
+          module: "auth" as const,
+          action: "login" as const,
+          method: "POST",
+          url: "/api/login",
+          params: { username: "admin", password: "******" },
+          ip: "127.0.0.1",
+          userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          status: "success" as const,
+          duration: 145,
+          createTime: Random.datetime("yyyy-MM-dd HH:mm:ss", -7, "2026-05-28"),
+        },
+        {
+          id: "log_002",
+          userId: 100,
+          username: "admin",
+          module: "task" as const,
+          action: "create" as const,
+          method: "POST",
+          url: "/api/task/create",
+          params: {
+            title: "用户登录功能优化",
+            description: "优化登录流程，增加验证码校验",
+            taskType: "feature",
+            priority: "high",
+            assignee: "管理员",
+            status: "todo",
+            tags: ["前端开发", "UI设计"],
+            dueDate: "2026-06-15",
+          },
+          ip: "127.0.0.1",
+          userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          status: "success" as const,
+          duration: 89,
+          createTime: Random.datetime("yyyy-MM-dd HH:mm:ss", -6, "2026-05-28"),
+        },
+        {
+          id: "log_003",
+          userId: 100,
+          username: "admin",
+          module: "task" as const,
+          action: "update" as const,
+          method: "POST",
+          url: "/api/task/update",
+          params: {
+            taskId: 2001,
+            newStatus: "done",
+            newIndex: 1,
+            title: "权限管理系统开发",
+            accessToken: "******",
+          },
+          ip: "127.0.0.1",
+          userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          status: "success" as const,
+          duration: 67,
+          createTime: Random.datetime("yyyy-MM-dd HH:mm:ss", -6, "2026-05-28"),
+        },
+        {
+          id: "log_004",
+          userId: 100,
+          username: "admin",
+          module: "user" as const,
+          action: "create" as const,
+          method: "POST",
+          url: "/api/user/create",
+          params: {
+            username: "zhaoliu",
+            nickname: "赵六",
+            role: "user",
+            password: "******",
+          },
+          ip: "127.0.0.1",
+          userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          status: "success" as const,
+          duration: 52,
+          createTime: Random.datetime("yyyy-MM-dd HH:mm:ss", -5, "2026-05-28"),
+        },
+        {
+          id: "log_005",
+          userId: 101,
+          username: "zhangsan",
+          module: "auth" as const,
+          action: "login" as const,
+          method: "POST",
+          url: "/api/login",
+          params: { username: "zhangsan", password: "******" },
+          ip: "192.168.1.105",
+          userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+          status: "success" as const,
+          duration: 98,
+          createTime: Random.datetime("yyyy-MM-dd HH:mm:ss", -5, "2026-05-28"),
+        },
+        {
+          id: "log_006",
+          userId: 101,
+          username: "zhangsan",
+          module: "task" as const,
+          action: "create" as const,
+          method: "POST",
+          url: "/api/task/create",
+          params: {
+            title: "移动端适配方案设计",
+            description: "响应式布局 + 触摸交互优化",
+            priority: "medium",
+            assignee: "张三",
+          },
+          ip: "192.168.1.105",
+          userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+          status: "success" as const,
+          duration: 76,
+          createTime: Random.datetime("yyyy-MM-dd HH:mm:ss", -4, "2026-05-28"),
+        },
+        {
+          id: "log_007",
+          userId: 100,
+          username: "admin",
+          module: "task" as const,
+          action: "delete" as const,
+          method: "POST",
+          url: "/api/task/delete",
+          params: { taskId: 1999, hardDelete: false },
+          ip: "127.0.0.1",
+          userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          status: "success" as const,
+          duration: 34,
+          createTime: Random.datetime("yyyy-MM-dd HH:mm:ss", -4, "2026-05-28"),
+        },
+        {
+          id: "log_008",
+          userId: 102,
+          username: "lisi",
+          module: "auth" as const,
+          action: "login" as const,
+          method: "POST",
+          url: "/api/login",
+          params: { username: "lisi", password: "******" },
+          ip: "10.0.0.42",
+          userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131.0.0.0",
+          status: "success" as const,
+          duration: 112,
+          createTime: Random.datetime("yyyy-MM-dd HH:mm:ss", -3, "2026-05-28"),
+        },
+        {
+          id: "log_009",
+          userId: 100,
+          username: "admin",
+          module: "user" as const,
+          action: "update" as const,
+          method: "POST",
+          url: "/api/user/update",
+          params: {
+            id: 101,
+            newNickname: "张三（已激活）",
+            newRole: "admin",
+          },
+          ip: "127.0.0.1",
+          userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          status: "success" as const,
+          duration: 45,
+          createTime: Random.datetime("yyyy-MM-dd HH:mm:ss", -3, "2026-05-28"),
+        },
+        {
+          id: "log_010",
+          userId: 100,
+          username: "admin",
+          module: "task" as const,
+          action: "create" as const,
+          method: "POST",
+          url: "/api/task/create",
+          params: {
+            title: "首页响应速度提升",
+            description: "减少首屏加载时间至 2s 以内",
+            taskType: "optimization",
+            priority: "high",
+            assignee: "李四",
+            tags: ["性能优化"],
+          },
+          ip: "127.0.0.1",
+          userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          status: "success" as const,
+          duration: 61,
+          createTime: Random.datetime("yyyy-MM-dd HH:mm:ss", -2, "2026-05-28"),
+        },
+        {
+          id: "log_011",
+          userId: 101,
+          username: "zhangsan",
+          module: "task" as const,
+          action: "update" as const,
+          method: "POST",
+          url: "/api/task/update",
+          params: {
+            taskId: 2003,
+            newStatus: "inProgress",
+            newIndex: 1,
+          },
+          ip: "192.168.1.105",
+          userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+          status: "success" as const,
+          duration: 55,
+          createTime: Random.datetime("yyyy-MM-dd HH:mm:ss", -2, "2026-05-28"),
+        },
+        {
+          id: "log_012",
+          userId: 103,
+          username: "wangwu",
+          module: "auth" as const,
+          action: "login" as const,
+          method: "POST",
+          url: "/api/login",
+          params: { username: "wangwu", password: "******" },
+          ip: "172.16.0.88",
+          userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)",
+          status: "success" as const,
+          duration: 203,
+          createTime: Random.datetime("yyyy-MM-dd HH:mm:ss", -2, "2026-05-28"),
+        },
+        {
+          id: "log_013",
+          userId: 100,
+          username: "admin",
+          module: "user" as const,
+          action: "delete" as const,
+          method: "POST",
+          url: "/api/user/delete",
+          params: { id: 999, hardDelete: true },
+          ip: "127.0.0.1",
+          userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          status: "success" as const,
+          duration: 38,
+          createTime: Random.datetime("yyyy-MM-dd HH:mm:ss", -1, "2026-05-28"),
+        },
+        {
+          id: "log_014",
+          userId: 100,
+          username: "admin",
+          module: "task" as const,
+          action: "update" as const,
+          method: "POST",
+          url: "/api/task/update",
+          params: {
+            taskId: 2005,
+            newPriority: "urgent",
+            isUrgent: true,
+          },
+          ip: "127.0.0.1",
+          userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          status: "success" as const,
+          duration: 41,
+          createTime: Random.datetime("yyyy-MM-dd HH:mm:ss", -1, "2026-05-28"),
+        },
+        {
+          id: "log_015",
+          userId: 101,
+          username: "zhangsan",
+          module: "task" as const,
+          action: "delete" as const,
+          method: "POST",
+          url: "/api/task/delete",
+          params: { taskId: 1988, hardDelete: false },
+          ip: "192.168.1.105",
+          userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+          status: "success" as const,
+          duration: 29,
+          createTime: Random.datetime("yyyy-MM-dd HH:mm:ss", -1, "2026-05-28"),
+        },
+        {
+          id: "log_016",
+          userId: 100,
+          username: "admin",
+          module: "task" as const,
+          action: "create" as const,
+          method: "POST",
+          url: "/api/task/create",
+          params: {
+            title: "数据导出功能实现",
+            description: "支持 Excel / CSV 格式导出任务报表",
+            taskType: "feature",
+            priority: "medium",
+            assignee: "王五",
+            tags: ["后端开发", "报表"],
+          },
+          ip: "127.0.0.1",
+          userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          status: "success" as const,
+          duration: 72,
+          createTime: Random.datetime("yyyy-MM-dd HH:mm:ss", 0, "2026-05-28"),
+        },
+        {
+          id: "log_017",
+          userId: 100,
+          username: "admin",
+          module: "auth" as const,
+          action: "logout" as const,
+          method: "GET",
+          url: "/api/logout",
+          params: {},
+          ip: "127.0.0.1",
+          userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          status: "success" as const,
+          duration: 15,
+          createTime: Random.datetime("yyyy-MM-dd HH:mm:ss", 0, "2026-05-28"),
+        },
+        {
+          id: "log_018",
+          userId: 102,
+          username: "lisi",
+          module: "auth" as const,
+          action: "logout" as const,
+          method: "GET",
+          url: "/api/logout",
+          params: {},
+          ip: "10.0.0.42",
+          userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131.0.0.0",
+          status: "success" as const,
+          duration: 18,
+          createTime: Random.datetime("yyyy-MM-dd HH:mm:ss", 0, "2026-05-28"),
+        },
+        {
+          id: "log_019",
+          userId: 100,
+          username: "admin",
+          module: "user" as const,
+          action: "create" as const,
+          method: "POST",
+          url: "/api/user/create",
+          params: {
+            username: "sunqi",
+            nickname: "孙七",
+            role: "viewer",
+            password: "******",
+          },
+          ip: "127.0.0.1",
+          userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          status: "success" as const,
+          duration: 48,
+          createTime: Random.datetime("yyyy-MM-dd HH:mm:ss", 0, "2026-05-28"),
+        },
+        {
+          id: "log_020",
+          userId: 100,
+          username: "admin",
+          module: "task" as const,
+          action: "create" as const,
+          method: "POST",
+          url: "/api/task/create",
+          params: {
+            title: "项目初始化与环境搭建",
+            description: "Vite + Vue3 + TypeScript + Pinia 技术栈配置",
+            taskType: "feature",
+            priority: "low",
+            assignee: "管理员",
+            tags: ["工程化", "基础设施"],
+          },
+          ip: "127.0.0.1",
+          userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          status: "success" as const,
+          duration: 93,
+          createTime: Random.datetime("yyyy-MM-dd HH:mm:ss", 0, "2026-05-28"),
+        },
+        {
+          id: "log_021",
+          userId: 101,
+          username: "zhangsan",
+          module: "task" as const,
+          action: "create" as const,
+          method: "POST",
+          url: "/api/task/create",
+          params: {
+            title: "",
+            password: "******",
+          },
+          ip: "192.168.1.105",
+          userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+          status: "fail" as const,
+          duration: 23,
+          createTime: Random.datetime("yyyy-MM-dd HH:mm:ss", 0, "2026-05-28"),
+        },
+      ];
+
+      /* 从 localStorage 读取真实日志（与预设数据合并）*/
+      let allLogs = [...presetLogs];
+      try {
+        const storedRaw = localStorage.getItem("wf_audit_logs");
+        if (storedRaw) {
+          const stored = JSON.parse(storedRaw);
+          if (Array.isArray(stored)) {
+            allLogs = [...stored, ...presetLogs];
+          }
+        }
+      } catch (_e) {
+        console.warn("[MOCK] [WARN] 读取 localStorage 审计日志失败，仅返回预设数据");
+      }
+
+      /* 按时间倒序排列 */
+      allLogs.sort(
+        (a, b) =>
+          new Date(b.createTime).getTime() - new Date(a.createTime).getTime(),
+      );
+
+      /* 应用筛选条件 */
+      if (module && module !== "") {
+        allLogs = allLogs.filter((l) => l.module === module);
+      }
+      if (action && action !== "") {
+        allLogs = allLogs.filter((l) => l.action === action);
+      }
+      if (username && username !== "") {
+        const kw = username.toLowerCase();
+        allLogs = allLogs.filter((l) =>
+          l.username.toLowerCase().includes(kw),
+        );
+      }
+      if (status && status !== "") {
+        allLogs = allLogs.filter((l) => l.status === status);
+      }
+      if (startTime) {
+        const start = new Date(startTime).getTime();
+        allLogs = allLogs.filter(
+          (l) => new Date(l.createTime).getTime() >= start,
+        );
+      }
+      if (endTime) {
+        const end = new Date(endTime).getTime();
+        allLogs = allLogs.filter(
+          (l) => new Date(l.createTime).getTime() <= end,
+        );
+      }
+
+      /* 分页计算 */
+      const total = allLogs.length;
+      const startIdx = (page - 1) * pageSize;
+      const list = allLogs.slice(startIdx, startIdx + pageSize);
+
+      console.log(
+        `[MOCK] [INFO] 日志列表查询: page=${page}, pageSize=${pageSize}, 筛选后总数=${total}`,
+      );
+
+      return {
+        code: 0,
+        data: { list, total, page, pageSize },
+        message: "查询成功",
+      };
     },
   } satisfies MockMethod,
 ];
