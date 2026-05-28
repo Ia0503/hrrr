@@ -1,4 +1,16 @@
 /**
+ * @file SchemaForm 表单引擎 - 类型定义文件
+ * @module components/SchemaForm/types
+ * @description 定义了 JSON Schema 驱动表单系统的全部类型，包括控件类型枚举（ComponentType）、联动规则（LinkageRule）、
+ *             Schema 字段定义（SchemaFormItem）、组件 Props/Emits 接口、以及 composable 函数的参数与返回值接口。
+ *             是整个 SchemaForm 表单引擎的类型基础。
+ *
+ * 依赖关系：
+ *   - 被引用于: components/SchemaForm/SchemaForm.vue, composables/useSchemaForm.ts, 所有使用 SchemaForm 的页面
+ *   - 依赖于: vue（Ref 类型）
+ */
+
+/**
  * SchemaForm 表单引擎 - 类型定义文件
  *
  * 本文件定义了 JSON Schema 驱动表单系统的全部类型，

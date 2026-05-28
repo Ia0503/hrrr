@@ -18,6 +18,16 @@
 -->
 <script setup lang="ts">
 /**
+ * @file 仪表盘首页组件
+ * @module views/dashboard
+ * @description 显示欢迎信息和当前用户角色/权限列表的仪表盘页面，包含实时时钟功能（北京时间 Asia/Shanghai 时区）。
+ *             用户登录后的默认首页，用于验证动态路由和权限配置是否正确生效。
+ *
+ * 依赖关系：
+ *   - 被引用于: 路由配置 /router/index.ts（仪表盘路由）
+ *   - 依赖于: stores/user.ts, vue
+ */
+/**
  * Dashboard 组件
  * Vue 3 Composition API + TypeScript 实现
  *
@@ -143,7 +153,7 @@ function startClock(): void {
   updateCurrentTime();
   timerId = setInterval(updateCurrentTime, 1000);
 
-  console.log("[dashboard] ✅ 实时时钟已启动");
+  console.log("[dashboard] [INFO] 实时时钟已启动");
 }
 
 /**
@@ -154,19 +164,19 @@ function stopClock(): void {
   if (timerId !== null) {
     clearInterval(timerId);
     timerId = null;
-    console.log("[dashboard] ✅ 实时时钟已停止");
+    console.log("[dashboard] [INFO] 实时时钟已停止");
   }
 }
 
 // ==================== 生命周期钩子 ====================
 
 onMounted(() => {
-  console.log("[dashboard] 📊 Dashboard 组件已挂载");
+  console.log("[dashboard] [INFO] Dashboard 组件已挂载");
   startClock();
 });
 
 onUnmounted(() => {
-  console.log("[dashboard] 📊 Dashboard 组件即将卸载");
+  console.log("[dashboard] [INFO] Dashboard 组件即将卸载");
   stopClock();
 });
 </script>

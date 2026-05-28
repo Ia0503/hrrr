@@ -23,7 +23,7 @@ import App from "./App.vue";
 import router from "./router";
 
 // 路由守卫（必须在 router 创建后、app.use(router) 前设置）
-import { setupRouterGuards } from "./router/guards";
+import { setupRouterGuards } from "./router";
 
 // v-permission 权限指令
 import permissionDirective from "./directives/permission";
@@ -66,7 +66,7 @@ for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
 }
 
 console.log(
-  `[main] ✅ Element Plus 已注册，共 ${Object.keys(ElementPlusIconsVue).length} 个图标组件`,
+  `[MAIN] [INFO] Element Plus 已注册，共 ${Object.keys(ElementPlusIconsVue).length} 个图标组件`,
 );
 
 // ==================== 设置路由守卫 ====================

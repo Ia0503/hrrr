@@ -1,4 +1,15 @@
 /**
+ * @file 权限控制自定义指令
+ * @module directives/permission
+ * @description 实现 v-permission 指令，用于按钮/元素级别的权限控制。根据用户权限码动态显示或移除 DOM 元素，
+ *             支持单个权限码或权限码数组（满足任一即显示），无权限时自动从 DOM 中移除元素（而非隐藏）。
+ *
+ * 依赖关系：
+ *   - 被引用于: main.ts（全局注册），需要权限控制的组件
+ *   - 依赖于: stores/user.ts, vue（Directive 类型）
+ */
+
+/**
  * 权限控制自定义指令
  * 实现 v-permission 指令，用于按钮/元素级别的权限控制
  *
@@ -98,7 +109,7 @@ export const permissionDirective: Directive = {
     // 校验绑定值是否有效（防御性编程）
     if (requiredPermissions.length === 0 || !requiredPermissions[0]) {
       console.warn(
-        "[permission-directive] ⚠️ v-permission 绑定值为空，默认显示元素",
+        "[permission-directive] [WARN] v-permission 绑定值为空，默认显示元素",
       );
       return; // 空值时默认放行（不移除元素）
     }
@@ -140,7 +151,7 @@ export const permissionDirective: Directive = {
     if (!hasPermission) {
       // ==================== 无权限处理逻辑 ====================
       console.warn(
-        `[permission-directive] ❌ 权限不足，已移除元素。缺少权限: [${requiredPermissions.join(", ")}]`,
+        `[permission-directive] [ERROR] 权限不足，已移除元素。缺少权限: [${requiredPermissions.join(", ")}]`,
       );
 
       /**
@@ -170,7 +181,7 @@ export const permissionDirective: Directive = {
       } else {
         // 极端情况：元素没有父节点（理论上不应发生）
         console.error(
-          "[permission-directive] ❌ 无法移除元素：parentNode 不存在",
+          "[permission-directive] [ERROR] 无法移除元素：parentNode 不存在",
         );
 
         /* 降级方案：
@@ -183,7 +194,7 @@ export const permissionDirective: Directive = {
     } else {
       // ==================== 有权限处理逻辑 ====================
       console.log(
-        `[permission-directive] ✅ 权限检查通过，保留元素`,
+        `[permission-directive] [INFO] 权限检查通过，保留元素`,
       );
 
       // 可选：为有权限的元素添加标记（便于调试）

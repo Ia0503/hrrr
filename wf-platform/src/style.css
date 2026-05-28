@@ -1,5 +1,16 @@
 @import "tailwindcss";
 
+/**
+ * @file 全局样式入口（Tailwind v4 + CSS 变量双主题系统）
+ * @module style
+ * @description 定义了 wf-platform 应用的全部全局样式，包括 Tailwind v4 暗色模式配置、主题 CSS 变量系统
+ *             （亮色/暗色双模式）、全局重置与基础样式、Element Plus 组件覆盖、以及通用工具类。
+ *
+ * 依赖关系：
+ *   - 被引用于: main.ts（全局样式入口）, 所有组件
+ *   - 依赖于: tailwindcss（CSS-first 配置）
+ */
+
 /* ============================================================
  * Tailwind v4 暗色模式配置
  *

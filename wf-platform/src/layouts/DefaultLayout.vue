@@ -25,6 +25,16 @@
 -->
 <script setup lang="ts">
 /**
+ * @file 默认布局组件（响应式双模式）
+ * @module layouts/DefaultLayout
+ * @description 应用主布局容器，提供大屏（≥1024px）经典后台布局（侧边栏 + 顶部导航）和小屏（<1024px）
+ *             移动端布局（滑出式抽屉导航）。包含主题切换、用户信息显示、退出登录等功能。
+ *
+ * 依赖关系：
+ *   - 被引用于: 路由配置 /router/index.ts（默认布局路由）
+ *   - 依赖于: stores/user.ts, stores/app.ts, vue-router, element-plus
+ */
+/**
  * DefaultLayout 组件 - 应用主布局容器（响应式双模式）
  *
  * 技术栈：Vue 3 Composition API + TypeScript + Element Plus + Pinia

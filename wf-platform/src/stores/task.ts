@@ -1,4 +1,15 @@
 /**
+ * @file 看板任务状态管理 Store（Pinia Setup Store 风格）
+ * @module stores/task
+ * @description 负责看板列数据管理、任务拖拽排序、乐观更新与回滚、WebSocket 实时同步等核心业务逻辑。
+ *             采用 Pinia Setup Store 风格，提供完整的 CRUD 操作和跨列/同列拖拽处理。
+ *
+ * 依赖关系：
+ *   - 被引用于: views/task/board.vue, views/task/TaskForm.vue
+ *   - 依赖于: utils/request.ts, utils/websocket.ts, pinia, vue
+ */
+
+/**
  * @fileoverview 看板任务状态管理 Store（Pinia Setup Store 风格）
  * 负责看板列数据、任务拖拽排序、乐观更新与回滚等核心逻辑
  */
@@ -120,9 +131,9 @@ export const useTaskStore = defineStore("task", () => {
     try {
       const res = await request.get("/api/task/board");
       boardColumns.value = res as BoardColumn[];
-      console.log("[task-store] ✅ 看板数据获取成功，共", boardColumns.value.length, "列");
+      console.log("[task-store] [INFO] 看板数据获取成功，共", boardColumns.value.length, "列");
     } catch (error) {
-      console.error("[task-store] ❌ 看板数据获取失败:", error);
+      console.error("[task-store] [ERROR] 看板数据获取失败:", error);
       throw error;
     } finally {
       loading.value = false;
@@ -178,7 +189,7 @@ export const useTaskStore = defineStore("task", () => {
     const { taskId, toColumnId } = params;
 
     console.log(
-      `[task-store] 🚀 持久化任务移动 [${taskId}] → [${toColumnId}]`,
+      `[task-store] [INFO] 持久化任务移动 [${taskId}] → [${toColumnId}]`,
     );
 
     /* 步骤一：创建快照备份（VueDraggable 已通过 v-model 修改了数组，需快照用于可能的回滚）*/
@@ -203,7 +214,7 @@ export const useTaskStore = defineStore("task", () => {
       movedTask.status = toColumnId;
 
       console.log(
-        `[task-store] 📝 任务 [${taskId}] 状态: ${oldStatus} → ${toColumnId}`,
+        `[task-store] [INFO] 任务 [${taskId}] 状态: ${oldStatus} → ${toColumnId}`,
       );
 
       /* 步骤三：调用后端接口持久化变更 */
@@ -213,7 +224,7 @@ export const useTaskStore = defineStore("task", () => {
         newIndex: params.newIndex,
       });
 
-      console.log(`[task-store] ✅ 任务 [${taskId}] 移动已持久化`);
+      console.log(`[task-store] [INFO] 任务 [${taskId}] 移动已持久化`);
     } catch (error) {
       /* 步骤四：API 失败 → 判断错误类型决定是否回滚 */
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -237,11 +248,11 @@ export const useTaskStore = defineStore("task", () => {
        */
       if (isNetworkError) {
         console.warn(
-          `[task-store] ⚠️ 网络层错误（可能是 Mock 未拦截），保持当前状态不回滚:`,
+          `[task-store] [WARN] 网络层错误（可能是 Mock 未拦截），保持当前状态不回滚:`,
           errorMessage,
         );
         console.warn(
-          `[task-store] 💡 提示：如频繁出现此错误，请重启 Dev Server（npm run dev）`,
+          `[task-store] [INFO] 提示：如频繁出现此错误，请重启 Dev Server（npm run dev）`,
         );
         /* 网络错误不回滚，也不抛出（静默成功），让用户体验不受影响 */
         return;
@@ -250,7 +261,7 @@ export const useTaskStore = defineStore("task", () => {
       /* 业务错误：回滚到快照状态（恢复 VueDraggable 修改前的数组）*/
       if (boardSnapshot !== null) {
         boardColumns.value = JSON.parse(JSON.stringify(boardSnapshot)) as BoardColumn[];
-        console.warn("[task-store] ⚠️ 持久化失败（业务错误），已回滚数据", error);
+        console.warn("[task-store] [WARN] 持久化失败（业务错误），已回滚数据", error);
       }
       throw error;
     } finally {
@@ -278,13 +289,13 @@ export const useTaskStore = defineStore("task", () => {
   function reorderWithinColumn(columnId: string, taskList: TaskItem[]): void {
     const column = boardColumns.value.find((col) => col.id === columnId);
     if (!column) {
-      console.warn(`[task-store] ⚠️ reorderWithinColumn: 未找到列 [${columnId}]，跳过重排序`);
+      console.warn(`[task-store] [WARN] reorderWithinColumn: 未找到列 [${columnId}]，跳过重排序`);
       return;
     }
 
     column.taskList = taskList;
     console.log(
-      `[task-store] 🔄 列 [${columnId}] 内部重排序完成，共 ${taskList.length} 个任务`,
+      `[task-store] [INFO] 列 [${columnId}] 内部重排序完成，共 ${taskList.length} 个任务`,
     );
   }
 
@@ -305,11 +316,11 @@ export const useTaskStore = defineStore("task", () => {
     const targetColumn = boardColumns.value.find((col) => col.id === targetStatus);
 
     if (!targetColumn) {
-      console.error(`[task-store] ❌ addTask: 未找到目标列 [${targetStatus}]`);
+      console.error(`[task-store] [ERROR] addTask: 未找到目标列 [${targetStatus}]`);
       throw new Error(`未找到目标列: ${targetStatus}`);
     }
 
-    console.log(`[task-store] 🚀 开始创建任务: "${formData.title}" → [${targetStatus}]`);
+    console.log(`[task-store] [INFO] 开始创建任务: "${formData.title}" → [${targetStatus}]`);
 
     try {
       /* 调用创建接口，由后端/Mock 生成 ID 并持久化 */
@@ -320,11 +331,11 @@ export const useTaskStore = defineStore("task", () => {
       targetColumn.taskList.push(newTask);
 
       console.log(
-        `[task-store] ✅ 任务已创建并持久化: id=${newTask.id}, title="${newTask.title}" ` +
+        `[task-store] [INFO] 任务已创建并持久化: id=${newTask.id}, title="${newTask.title}" ` +
         `(列 [${targetStatus}] 现有 ${targetColumn.taskList.length} 个任务)`,
       );
     } catch (error) {
-      console.error("[task-store] ❌ 任务创建失败:", error);
+      console.error("[task-store] [ERROR] 任务创建失败:", error);
       throw error;
     }
   }
@@ -343,7 +354,7 @@ export const useTaskStore = defineStore("task", () => {
   async function updateTask(formData: Record<string, unknown>): Promise<void> {
     const taskId = formData.id as number | string;
 
-    console.log(`[task-store] 📝 开始更新任务: id=${taskId}, title="${formData.title}"`);
+    console.log(`[task-store] [INFO] 开始更新任务: id=${taskId}, title="${formData.title}"`);
 
     try {
       /**
@@ -368,16 +379,16 @@ export const useTaskStore = defineStore("task", () => {
         if (taskIdx !== -1) {
           Object.assign(col.taskList[taskIdx], formData);
           console.log(
-            `[task-store] ✅ 任务已更新: id=${taskId}, 列=[${col.id}]`,
+            `[task-store] [INFO] 任务已更新: id=${taskId}, 列=[${col.id}]`,
           );
           return;
         }
       }
 
       /* 本地未找到该任务（异常情况）*/
-      console.warn(`[task-store] ⚠️ 更新成功但本地未找到任务: ${taskId}`);
+      console.warn(`[task-store] [WARN] 更新成功但本地未找到任务: ${taskId}`);
     } catch (error) {
-      console.error("[task-store] ❌ 任务更新失败:", error);
+      console.error("[task-store] [ERROR] 任务更新失败:", error);
       throw error;
     }
   }
@@ -405,7 +416,7 @@ export const useTaskStore = defineStore("task", () => {
   function initSocketListeners(): void {
     /* 幂等守卫：若已初始化则直接返回，防止重复注册 */
     if (wsListenersInitialized.value) {
-      console.warn("[task-store] ⚠️ WebSocket 监听器已初始化，跳过重复注册");
+      console.warn("[task-store] [WARN] WebSocket 监听器已初始化，跳过重复注册");
       return;
     }
 
@@ -462,7 +473,7 @@ export const useTaskStore = defineStore("task", () => {
         } else {
           // 目标列不存在时回退到原列（防御性处理）
           console.warn(
-            `[task-store] [WS] ⚠️ 任务 [${updatedTask.id}] 目标列 [${updatedTask.status}] 不存在，已回退`,
+            `[task-store] [WS] [WARN] 任务 [${updatedTask.id}] 目标列 [${updatedTask.status}] 不存在，已回退`,
           );
           foundColumn.taskList.splice(taskIndexInColumn, 0, movedTask);
         }
@@ -476,7 +487,7 @@ export const useTaskStore = defineStore("task", () => {
         console.log(`[task-store] [WS] 新任务已同步（UPDATE 回退）: [${updatedTask.id}]`);
       } else {
         console.warn(
-          `[task-store] [WS] ⚠️ 任务 [${updatedTask.id}] 的状态列 [${updatedTask.status}] 不存在，无法同步`,
+          `[task-store] [WS] [WARN] 任务 [${updatedTask.id}] 的状态列 [${updatedTask.status}] 不存在，无法同步`,
         );
       }
     });
@@ -499,7 +510,7 @@ export const useTaskStore = defineStore("task", () => {
       }
 
       // 本地未找到该任务（可能已被其他事件提前移除），仅记录日志
-      console.warn(`[task-store] [WS] ⚠️ 待删除任务 [${taskId}] 在本地未找到，可能已被移除`);
+      console.warn(`[task-store] [WS] [WARN] 待删除任务 [${taskId}] 在本地未找到，可能已被移除`);
     });
 
     /* ---------- c) TASK_CREATED 监听器 ----------
@@ -517,14 +528,14 @@ export const useTaskStore = defineStore("task", () => {
         console.log(`[task-store] [WS] 新任务已创建: [${newTask.id}]`);
       } else {
         console.warn(
-          `[task-store] [WS] ⚠️ 新任务 [${newTask.id}] 的状态列 [${newTask.status}] 不存在`,
+          `[task-store] [WS] [WARN] 新任务 [${newTask.id}] 的状态列 [${newTask.status}] 不存在`,
         );
       }
     });
 
     /* 标记初始化完成 */
     wsListenersInitialized.value = true;
-    console.log("[task-store] ✅ WebSocket 监听器已初始化，共注册 3 个事件监听");
+    console.log("[task-store] [INFO] WebSocket 监听器已初始化，共注册 3 个事件监听");
   }
 
   /**
@@ -545,7 +556,7 @@ export const useTaskStore = defineStore("task", () => {
     /* 重置初始化标志，允许后续重新调用 initSocketListeners */
     wsListenersInitialized.value = false;
 
-    console.log("[task-store] 🔌 WebSocket 监听器已清理");
+    console.log("[task-store] [INFO] WebSocket 监听器已清理");
   }
 
   /* ---------- 返回值：暴露给组件使用的状态与方法 ---------- */

@@ -1,4 +1,15 @@
 /**
+ * @file WebSocket 管理模块（基于 socket.io-client）
+ * @module utils/websocket
+ * @description 提供全应用唯一的 WebSocket 连接管理入口，包含单例模式 WebSocketManager 类、统一的连接/断开/监听/发送 API、
+ *             自动重连机制（最多 5 次，指数退避）、响应式连接状态（基于 Vue ref）以及完整的事件生命周期日志。
+ *
+ * 依赖关系：
+ *   - 被引用于: stores/task.ts, views/task/board.vue, 全局需要实时通信的模块
+ *   - 依赖于: socket.io-client, vue（ref）
+ */
+
+/**
  * WebSocket 管理模块（基于 socket.io-client）
  * 提供全应用唯一的 WebSocket 连接管理入口，包含：
  *   - 单例模式 WebSocketManager 类
@@ -150,7 +161,7 @@ class WebSocketManager {
    * 外部禁止直接 new，必须通过 getInstance() 获取实例
    */
   private constructor() {
-    console.log("[ws] 🏗️ WebSocketManager 单例已初始化");
+    console.log("[ws] [INFO] WebSocketManager 单例已初始化");
   }
 
   // ==================== 单例入口 ====================
@@ -203,13 +214,13 @@ class WebSocketManager {
   async connect(url: string, token: string): Promise<void> {
     // 检查是否已连接（防止重复连接）
     if (this.socket?.connected) {
-      console.warn("[ws] ⚠️ 已处于连接状态，忽略重复连接请求");
+      console.warn("[ws] [WARN] 已处于连接状态，忽略重复连接请求");
       return;
     }
 
     /** 未配置 WS 服务地址时直接跳过，不发起无意义的连接尝试 */
     if (!url || url === "undefined" || url.trim() === "") {
-      console.warn("[ws] ⚠️ WebSocket URL 未配置 (VITE_WS_URL)，跳过连接");
+      console.warn("[ws] [WARN] WebSocket URL 未配置 (VITE_WS_URL)，跳过连接");
       this.status.value = ConnectionStatus.DISCONNECTED;
       return Promise.resolve();
     }
@@ -218,7 +229,7 @@ class WebSocketManager {
     this.status.value = ConnectionStatus.CONNECTING;
     this.serverUrl = url;
 
-    console.log(`[ws] 🔗 正在连接到服务器: ${url}`);
+    console.log(`[ws] [INFO] 正在连接到服务器: ${url}`);
 
     return new Promise<void>((resolve, reject) => {
       // 创建 socket.io 实例（核心配置项见下方注释）
@@ -242,7 +253,7 @@ class WebSocketManager {
       this.socket.on("connect", () => {
         this.status.value = ConnectionStatus.CONNECTED;
         this.reconnectAttemptsMade = 0; // 重置重连计数
-        console.log(`[ws] ✅ 已连接到服务器 ${url}`);
+        console.log(`[ws] [INFO] 已连接到服务器 ${url}`);
         resolve(); // Promise resolve，通知调用方连接成功
       });
 
@@ -256,12 +267,12 @@ class WebSocketManager {
        *   - "transport error"：传输层错误
        */
       this.socket.on("disconnect", (reason: string) => {
-        console.warn(`[ws] 🔌 连接断开，原因: ${reason}`);
+        console.warn(`[ws] [WARN] 连接断开，原因: ${reason}`);
         this.status.value = ConnectionStatus.DISCONNECTED;
 
         // 服务端主动断开 → 尝试自动重连
         if (reason === "io server disconnect") {
-          console.log("[ws] 🔄 服务端主动断开，尝试自动重连...");
+          console.log("[ws] [INFO] 服务端主动断开，尝试自动重连...");
           this.socket?.connect();
         }
       });
@@ -271,7 +282,7 @@ class WebSocketManager {
        * 触发场景：服务端不可达、认证失败、CORS 错误等
        */
       this.socket.on("connect_error", (error: Error) => {
-        console.error("[ws] ❌ 连接错误:", error.message);
+        console.error("[ws] [ERROR] 连接错误:", error.message);
         this.status.value = ConnectionStatus.ERROR;
         reject(error); // Promise reject，通知调用方连接失败
       });
@@ -284,7 +295,7 @@ class WebSocketManager {
         this.reconnectAttemptsMade = attemptNum;
         this.status.value = ConnectionStatus.RECONNECTING;
         console.log(
-          `[ws] 🔁 正在重连... 第 ${attemptNum} 次 / 最大 ${this.MAX_RECONNECT_ATTEMPTS} 次`,
+          `[ws] [INFO] 正在重连... 第 ${attemptNum} 次 / 最大 ${this.MAX_RECONNECT_ATTEMPTS} 次`,
         );
       });
 
@@ -294,7 +305,7 @@ class WebSocketManager {
        */
       this.socket.on("reconnect_failed", () => {
         console.error(
-          `[ws] ❌ 重连失败，已达最大尝试次数 (${this.MAX_RECONNECT_ATTEMPTS})`,
+          `[ws] [ERROR] 重连失败，已达最大尝试次数 (${this.MAX_RECONNECT_ATTEMPTS})`,
         );
         this.status.value = ConnectionStatus.ERROR;
         this._handleReconnectFailure(); // 执行降级处理
@@ -305,7 +316,7 @@ class WebSocketManager {
        * 重连过程中某次尝试成功后触发
        */
       this.socket.on("reconnect_success", () => {
-        console.log("[ws] 🔄 重连成功");
+        console.log("[ws] [INFO] 重连成功");
         this.status.value = ConnectionStatus.CONNECTED;
         this.reconnectAttemptsMade = 0; // 重置计数
       });
@@ -325,7 +336,7 @@ class WebSocketManager {
    */
   disconnect(): void {
     if (!this.socket) {
-      console.log("[ws] ℹ️ 当前无活跃连接，无需断开");
+      console.log("[ws] [INFO] 当前无活跃连接，无需断开");
       return;
     }
 
@@ -375,12 +386,12 @@ class WebSocketManager {
     callback: (payload: SocketPayload<T>) => void,
   ): void {
     if (!this.socket) {
-      console.warn("[ws] ⚠️ 未连接，无法注册监听器");
+      console.warn("[ws] [WARN] 未连接，无法注册监听器");
       return;
     }
 
     this.socket.on(event, callback);
-    console.log(`[ws] 🎧 注册监听: ${event}`);
+    console.log(`[ws] [INFO] 注册监听: ${event}`);
   }
 
   // ==================== 公共方法：移除监听 ====================
@@ -405,7 +416,7 @@ class WebSocketManager {
    */
   off(event: string | SocketEvent, callback?: (...args: unknown[]) => void): void {
     if (!this.socket) {
-      console.warn("[ws] ⚠️ 未连接，无法移除监听器");
+      console.warn("[ws] [WARN] 未连接，无法移除监听器");
       return;
     }
 
@@ -415,7 +426,7 @@ class WebSocketManager {
       this.socket.off(event); // 不传 callback 则移除该事件的所有监听器
     }
 
-    console.log(`[ws] 🔇 移除监听: ${event}${callback ? " (指定回调)" : " (全部)"}`);
+    console.log(`[ws] [INFO] 移除监听: ${event}${callback ? " (指定回调)" : " (全部)"}`);
   }
 
   // ==================== 公共方法：发送消息 ====================
@@ -437,12 +448,12 @@ class WebSocketManager {
    */
   emit(event: string, data: unknown): void {
     if (!this.socket || !this.socket.connected) {
-      console.warn(`[ws] ⚠️ 未连接或连接已断开，无法发送消息: ${event}`);
+      console.warn(`[ws] [WARN] 未连接或连接已断开，无法发送消息: ${event}`);
       return;
     }
 
     this.socket.emit(event, data);
-    console.log(`[ws] 📤 发送消息: ${event}`, data);
+    console.log(`[ws] [INFO] 发送消息: ${event}`, data);
   }
 
   // ==================== 公共方法：获取状态 ====================
@@ -503,13 +514,13 @@ class WebSocketManager {
    * 此方法为内部降级策略的入口点，可根据业务需求扩展
    */
   private _handleReconnectFailure(): void {
-    console.group("[ws] ⛔ 连接降级警告");
+    console.group("[ws] [ERROR] 连接降级警告");
     console.error(
       "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
     );
-    console.error("⚠️  WebSocket 连接已彻底丢失");
+    console.error("[WARN]  WebSocket 连接已彻底丢失");
     console.error(
-      `⚠️  已尝试重连 ${this.MAX_RECONNECT_ATTEMPTS} 次均未成功`,
+      `[WARN]  已尝试重连 ${this.MAX_RECONNECT_ATTEMPTS} 次均未成功`,
     );
     console.error("");
     console.error("建议操作：");
@@ -532,7 +543,7 @@ class WebSocketManager {
     //   router.push('/offline');
 
     console.warn(
-      "[ws] 💡 提示：可在此处扩展全局通知或页面跳转等降级逻辑",
+      "[ws] [INFO] 提示：可在此处扩展全局通知或页面跳转等降级逻辑",
     );
   }
 }
@@ -550,10 +561,10 @@ class WebSocketManager {
  *   3. 若服务端在超时时间内未收到 pong，判定连接失效并断开
  *
  * 本实现的处理方式：
- *   - ❌ 不自行实现自定义心跳定时器（避免与 socket.io 内置机制冲突）
- *   - ✅ 利用 socket.io 原生心跳检测连接活性
- *   - ✅ 通过监听 disconnect 事件（reason === "ping timeout"）感知心跳超时
- *   - ✅ 如需应用层心跳日志，可监听 SocketEvent.PONG 事件（需服务端配合发送）
+ *   - 不自行实现自定义心跳定时器（避免与 socket.io 内置机制冲突）
+ *   - 利用 socket.io 原生心跳检测连接活性
+ *   - 通过监听 disconnect 事件（reason === "ping timeout"）感知心跳超时
+ *   - 如需应用层心跳日志，可监听 SocketEvent.PONG 事件（需服务端配合发送）
  *
  * 配置建议（在服务端 socket.io 配置中调整）：
  *   - pingInterval: 25000（ping 发送间隔，默认 25s）

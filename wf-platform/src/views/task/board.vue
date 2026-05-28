@@ -1,12 +1,13 @@
 <script setup lang="ts">
 /**
- * @fileoverview 任务看板页面（Phase 3 + 4 核心业务页）
+ * @file 任务看板页面（Phase 3 + 4 核心业务页）
+ * @module views/task/board
+ * @description 三列看板布局的任务管理页面，支持跨列拖拽排序、实时协同（WebSocket 状态同步）、新建/编辑/删除任务等功能。
+ *             使用 vue-draggable-plus 实现拖拽，SchemaForm 驱动表单，taskStore 管理状态。
  *
- * 功能概览：
- * - 三列看板布局（待处理 / 进行中 / 已完成）
- * - 跨列拖拽排序（vue-draggable-plus）
- * - 实时协同（WebSocket 状态同步）
- * - 新建任务弹窗（SchemaForm 驱动）
+ * 依赖关系：
+ *   - 被引用于: 路由配置 /router/index.ts
+ *   - 依赖于: stores/task.ts, utils/websocket.ts, utils/request.ts, components/SchemaForm
  */
 
 import { ref, onMounted, onUnmounted } from "vue";
@@ -21,7 +22,7 @@ import { getWebSocketManager } from "@/utils/websocket";
 /** HTTP 请求封装（用于调用创建任务接口） */
 import request from "@/utils/request";
 
-import TaskForm from "./components/TaskForm.vue";
+import TaskForm from "./TaskForm.vue";
 
 /* ============================================================
  * Store & State 初始化
@@ -52,14 +53,14 @@ const wsConnected = ref(false);
  * ============================================================ */
 
 onMounted(async () => {
-  console.log("[board] 🎯 看板页面已挂载，开始初始化...");
+  console.log("[board] [INFO] 看板页面已挂载，开始初始化...");
 
   try {
     loading.value = true;
     await taskStore.fetchBoardData();
-    console.log("[board] ✅ 看板数据加载完成");
+    console.log("[board] [INFO] 看板数据加载完成");
   } catch (error) {
-    console.error("[board] ❌ 看板数据加载失败:", error);
+    console.error("[board] [ERROR] 看板数据加载失败:", error);
     ElMessage.error("看板数据加载失败，请刷新重试");
   } finally {
     loading.value = false;
@@ -83,21 +84,21 @@ function initWebSocket(): void {
   /** 未配置 WebSocket 服务地址时跳过连接 */
   const wsUrl = import.meta.env.VITE_WS_URL;
   if (!wsUrl || wsUrl === "undefined" || !wsUrl.trim()) {
-    console.log("[board] ⏭️ WebSocket 未配置，跳过初始化（离线模式）");
+    console.log("[board] WebSocket 未配置，跳过初始化（离线模式）");
     return;
   }
 
   if (wsManager.connected) {
     wsConnected.value = true;
     taskStore.initSocketListeners();
-    console.log("[board] 📡 WebSocket 已连接，已注册监听");
+    console.log("[board] WebSocket 已连接，已注册监听");
   } else {
     wsManager.connect().then(() => {
       wsConnected.value = true;
       taskStore.initSocketListeners();
-      console.log("[board] 📡 WebSocket 连接成功并注册监听");
+      console.log("[board] WebSocket 连接成功并注册监听");
     }).catch((err: unknown) => {
-      console.warn("[board] ⚠️ WebSocket 连接失败，将使用离线模式:", err);
+      console.warn("[board] [WARN] WebSocket 连接失败，将使用离线模式:", err);
       wsConnected.value = false;
     });
   }
@@ -107,7 +108,7 @@ function cleanupWebSocket(): void {
   try {
     taskStore.cleanupSocketListeners();
     wsConnected.value = false;
-    console.log("[board] 🔌 WebSocket 监听已清理");
+    console.log("[board] WebSocket 监听已清理");
   } catch (error) {
     console.warn("[board] 清理 WebSocket 时发生错误:", error);
   }
@@ -135,7 +136,7 @@ async function onDragEnd(evt: any): Promise<void> {
   const toColumnId = (evt.to.closest(".wf-board-column") as HTMLElement)?.dataset?.columnId || "";
 
   console.log(
-    `[board] 🚀 拖拽完成: taskId=${taskId} (${typeof taskId}), ` +
+    `[board] [INFO] 拖拽完成: taskId=${taskId} (${typeof taskId}), ` +
     `从[${fromColumnId}] → 到[${toColumnId}], 位置 ${evt.oldIndex} → ${evt.newIndex}`,
   );
 
@@ -155,7 +156,7 @@ async function onDragEnd(evt: any): Promise<void> {
  * @param newOrder - 排序后的任务 ID 数组
  */
 async function onSortEnd(columnId: string, newOrder: string[]): Promise<void> {
-  console.log(`[board] 📋 列 [${columnId}] 内部排序完成`);
+  console.log(`[board] [INFO] 列 [${columnId}] 内部排序完成`);
 
   try {
     await taskStore.reorderWithinColumn(columnId, newOrder);
@@ -312,13 +313,13 @@ function openCreateDialog(): void {
  *   3. API 失败时抛出错误，由此处 catch 处理提示
  */
 const handleTaskFormSubmit = async (data: Record<string, unknown>) => {
-  console.log("[board] 📝 收到新建任务提交数据:", JSON.stringify(data, null, 2));
+  console.log("[board] [INFO] 收到新建任务提交数据:", JSON.stringify(data, null, 2));
 
   try {
     await taskStore.addTask(data);
     ElMessage.success(`任务 "${String(data.title || "未命名")}" 创建成功！`);
   } catch (error) {
-    console.error("[board] ❌ 创建任务失败:", error);
+    console.error("[board] [ERROR] 创建任务失败:", error);
     ElMessage.error("创建失败，请重试");
   }
 };
@@ -333,7 +334,7 @@ const handleTaskFormSubmit = async (data: Record<string, unknown>) => {
  * @param task - 被点击的任务卡片对应的数据对象
  */
 function openDetailDialog(task: TaskItem): void {
-  console.log(`[board] 👁️ 打开任务详情: id=${task.id}, title=${task.title}`);
+  console.log(`[board] [INFO] 打开任务详情: id=${task.id}, title=${task.title}`);
   selectedTask.value = task;
   showDetailDialog.value = true;
 }
@@ -345,11 +346,11 @@ function openDetailDialog(task: TaskItem): void {
  */
 function handleEditTask(): void {
   if (!selectedTask.value) {
-    console.warn("[board] ⚠️ 无选中任务，无法编辑");
+    console.warn("[board] [WARN] 无选中任务，无法编辑");
     return;
   }
 
-  console.log(`[board] ✏️ 进入编辑模式: id=${selectedTask.value.id}`);
+  console.log(`[board] [INFO] 进入编辑模式: id=${selectedTask.value.id}`);
 
   /* 关闭详情弹窗，切换到编辑表单 */
   showDetailDialog.value = false;
@@ -369,7 +370,7 @@ function handleEditTask(): void {
  */
 async function handleDeleteTask(): Promise<void> {
   if (!selectedTask.value) {
-    console.warn("[board] ⚠️ 无选中任务，无法删除");
+    console.warn("[board] [WARN] 无选中任务，无法删除");
     return;
   }
 
@@ -388,7 +389,7 @@ async function handleDeleteTask(): Promise<void> {
       },
     );
 
-    console.log(`[board] 🗑️ 用户确认删除任务: id=${selectedTask.value.id}`);
+    console.log(`[board] [INFO] 用户确认删除任务: id=${selectedTask.value.id}`);
 
     /* 调用删除接口 */
     await request.delete("/api/task/delete", {
@@ -396,7 +397,7 @@ async function handleDeleteTask(): Promise<void> {
     });
 
     ElMessage.success(`任务「${taskTitle}」已删除`);
-    console.log(`[board] ✅ 任务删除成功，刷新看板数据`);
+    console.log(`[board] [INFO] 任务删除成功，刷新看板数据`);
 
     /* 关闭详情弹窗并刷新看板 */
     showDetailDialog.value = false;
@@ -410,7 +411,7 @@ async function handleDeleteTask(): Promise<void> {
       return;
     }
 
-    console.error("[board] ❌ 删除任务失败:", error);
+    console.error("[board] [ERROR] 删除任务失败:", error);
     ElMessage.error("删除失败，请重试");
   }
 }
@@ -421,13 +422,13 @@ async function handleDeleteTask(): Promise<void> {
  * 与新建提交的区别：需要调用更新接口而非创建接口
  */
 const handleEditFormSubmit = async (data: Record<string, unknown>) => {
-  console.log("[board] 📝 收到编辑任务提交数据:", JSON.stringify(data, null, 2));
+  console.log("[board] [INFO] 收到编辑任务提交数据:", JSON.stringify(data, null, 2));
 
   try {
     await taskStore.updateTask(data);
     ElMessage.success(`任务 "${String(data.title || "未命名")}" 更新成功！`);
   } catch (error) {
-    console.error("[board] ❌ 更新任务失败:", error);
+    console.error("[board] [ERROR] 更新任务失败:", error);
     ElMessage.error("更新失败，请重试");
   } finally {
     /* 编辑完成后清空 editingTaskData，避免下次打开新建弹窗时残留数据 */

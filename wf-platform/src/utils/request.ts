@@ -1,4 +1,15 @@
 /**
+ * @file Axios HTTP 请求封装模块
+ * @module utils/request
+ * @description 基于 Axios 的统一 HTTP 请求封装，提供泛型响应结构、请求/响应拦截器、无感刷新 Token（Promise 队列+锁机制）、
+ *             以及 GET/POST/PUT/DELETE 等便捷方法。所有业务请求均通过此模块发出。
+ *
+ * 依赖关系：
+ *   - 被引用于: 全局（stores、views、composables 等所有需要 HTTP 请求的模块）
+ *   - 依赖于: axios, localStorage（浏览器原生 API）
+ */
+
+/**
  * Axios 深度封装模块
  * 提供统一的 HTTP 请求能力，包含：
  *   - 泛型响应结构 ApiResponse<T>
@@ -209,7 +220,7 @@ async function performTokenRefresh(): Promise<string> {
   setToken(accessToken);
   localStorage.setItem(REFRESH_TOKEN_KEY, newRefreshToken);
 
-  console.log("[request] ✅ Token 刷新成功");
+  console.log("[request] [INFO] Token 刷新成功");
 
   return accessToken;
 }
@@ -231,14 +242,14 @@ async function handle401AndRetry(
 ): Promise<AxiosResponse> {
   // 如果原请求本身就在请求 refresh-token 接口，避免无限递归
   if (originalConfig.url === REFRESH_TOKEN_URL) {
-    console.error("[request] 🔄 刷新 Token 接口本身返回 401，终止重试");
+    console.error("[request] [ERROR] 刷新 Token 接口本身返回 401，终止重试");
     clearAuthAndRedirect("Refresh Token 已失效");
     return Promise.reject(new Error("Refresh Token 无效"));
   }
 
   // 情况 A：当前没有正在进行的刷新 → 发起刷新
   if (!isRefreshing) {
-    console.log("[request] 🔒 加锁，发起 Token 刷新（首个 401 请求触发）");
+    console.log("[request] [INFO] 加锁，发起 Token 刷新（首个 401 请求触发）");
     isRefreshing = true;
 
     try {
@@ -246,7 +257,7 @@ async function handle401AndRetry(
 
       // 刷新成功：依次唤醒队列中等待的所有请求
       console.log(
-        `[request] ✅ 刷新成功，唤醒队列中 ${requestQueue.length} 个等待请求`,
+        `[request] [INFO] 刷新成功，唤醒队列中 ${requestQueue.length} 个等待请求`,
       );
       requestQueue.forEach((resolve) => resolve(newToken));
       requestQueue = []; // 清空队列
@@ -257,7 +268,7 @@ async function handle401AndRetry(
     } catch (refreshError) {
       // 刷新失败：拒绝队列中所有等待的请求
       console.error(
-        `[request] ❌ Token 刷新失败，拒绝队列中 ${requestQueue.length} 个请求`,
+        `[request] [ERROR] Token 刷新失败，拒绝队列中 ${requestQueue.length} 个请求`,
       );
       requestQueue.forEach((reject) =>
         reject(refreshError as unknown as string),
@@ -269,12 +280,12 @@ async function handle401AndRetry(
     } finally {
       // 无论成功失败，最终解锁
       isRefreshing = false;
-      console.log("[request] 🔓 解锁，后续 401 请求可重新发起刷新");
+      console.log("[request] [INFO] 解锁，后续 401 请求可重新发起刷新");
     }
   }
 
   // 情况 B：已有刷新正在进行 → 加入等待队列
-  console.log("[request] ⏳ 已有刷新进行中，当前请求加入等待队列");
+  console.log("[request] [INFO] 已有刷新进行中，当前请求加入等待队列");
 
   return new Promise<string>((resolve, _reject) => {
     requestQueue.push(resolve); // 注意：这里只 push resolve，_reject 在刷新失败时统一处理
@@ -316,11 +327,11 @@ instance.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
       console.log(
-        `[request] 📤 请求拦截: ${config.method?.toUpperCase()} ${config.url}`,
+        `[request] [INFO] 请求拦截: ${config.method?.toUpperCase()} ${config.url}`,
       );
     } else {
       console.log(
-        `[request] 📤 请求拦截（无 Token）: ${config.method?.toUpperCase()} ${config.url}`,
+        `[request] [INFO] 请求拦截（无 Token）: ${config.method?.toUpperCase()} ${config.url}`,
       );
     }
 
@@ -335,7 +346,7 @@ instance.interceptors.request.use(
    * @returns Promise reject，传递错误给调用方
    */
   (error: unknown) => {
-    console.error("[request] ❌ 请求发送失败:", error);
+    console.error("[request] [ERROR] 请求发送失败:", error);
     return Promise.reject(error);
   },
 );
@@ -360,13 +371,13 @@ instance.interceptors.response.use(
 
     // HTTP 层面成功，检查业务层状态码
     if (data.code === SUCCESS_CODE) {
-      console.log(`[request] 📥 响应成功: ${method} ${url}`);
+      console.log(`[request] [INFO] 响应成功: ${method} ${url}`);
       return Promise.resolve(data.data);
     }
 
     // 业务错误（code 非 SUCCESS_CODE）
     console.warn(
-      `[request] ⚠️ 业务错误 [${data.code}]: ${method} ${url} — ${data.message}`,
+      `[request] [WARN] 业务错误 [${data.code}]: ${method} ${url} — ${data.message}`,
     );
 
     // 可选：根据特定业务错误码做特殊处理
@@ -403,7 +414,7 @@ instance.interceptors.response.use(
       // ========== 核心：401 无感刷新 Token ==========
       if (status === UNAUTHORIZED_STATUS) {
         console.warn(
-          `[request] 🔁 收到 401: ${config.method?.toUpperCase()} ${url}，尝试无感刷新`,
+          `[request] [WARN] 收到 401: ${config.method?.toUpperCase()} ${url}，尝试无感刷新`,
         );
         return handle401AndRetry(config);
       }
@@ -418,7 +429,7 @@ instance.interceptors.response.use(
           : `请求失败(HTTP ${status})`;
 
       console.error(
-        `[request] ❌ HTTP 错误 [${status}]: ${config.method?.toUpperCase()} ${url} — ${errorMessage}`,
+        `[request] [ERROR] HTTP 错误 [${status}]: ${config.method?.toUpperCase()} ${url} — ${errorMessage}`,
       );
 
       return Promise.reject(new Error(errorMessage));
@@ -427,7 +438,7 @@ instance.interceptors.response.use(
     // 非 Axios 错误（网络中断、超时等）
     const errorMessage =
       error instanceof Error ? error.message : "网络请求异常";
-    console.error(`[request] ❌ 请求异常: ${errorMessage}`);
+    console.error(`[request] [ERROR] 请求异常: ${errorMessage}`);
 
     return Promise.reject(error);
   },

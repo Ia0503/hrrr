@@ -1,4 +1,15 @@
 /**
+ * @file 用户状态管理 Store
+ * @module stores/user
+ * @description 使用 Pinia Setup Store 风格管理用户登录状态、Token（访问令牌和刷新令牌）、用户基本信息、角色权限
+ *             以及动态菜单路由。提供登录、获取用户信息、登出等核心操作方法。
+ *
+ * 依赖关系：
+ *   - 被引用于: views/login/index.vue, 路由守卫, 全局需要用户状态的模块
+ *   - 依赖于: utils/request.ts, vue-router, pinia, vue
+ */
+
+/**
  * 用户状态管理 Store
  * 使用 Pinia Setup Store 风格管理用户登录状态、权限和动态菜单
  *
@@ -199,11 +210,11 @@ export const useUserStore = defineStore("user", () => {
       token.value = response.accessToken;
 
       console.log(
-        `[user-store] ✅ 登录成功: token=${response.accessToken.substring(0, 12)}...`,
+        `[user-store] [INFO] 登录成功: token=${response.accessToken.substring(0, 12)}...`,
       );
     } catch (error: unknown) {
       // 记录详细的错误信息
-      console.error("[user-store] ❌ 登录失败:", error);
+      console.error("[user-store] [ERROR] 登录失败:", error);
 
       // 清理可能残留的无效 Token
       localStorage.removeItem(TOKEN_KEY);
@@ -257,11 +268,11 @@ export const useUserStore = defineStore("user", () => {
       permissions.value = response.permissions;
 
       console.log(
-        `[user-store] ✅ 用户信息获取成功: username=${response.username}, roles=[${response.roles.join(", ")}], permissions=[${permissions.value.join(", ")}]`,
+        `[user-store] [INFO] 用户信息获取成功: username=${response.username}, roles=[${response.roles.join(", ")}], permissions=[${permissions.value.join(", ")}]`,
       );
     } catch (error: unknown) {
       // 记录错误日志
-      console.error("[user-store] ❌ 获取用户信息失败:", error);
+      console.error("[user-store] [ERROR] 获取用户信息失败:", error);
 
       // 清空可能不完整的用户数据
       userInfo.value = null;
@@ -303,7 +314,7 @@ export const useUserStore = defineStore("user", () => {
     permissions.value = [];
     isDynamicRoutesAdded.value = false;
 
-    console.log("[user-store] ✅ 登出完成，已清除所有用户状态");
+    console.log("[user-store] [INFO] 登出完成，已清除所有用户状态");
 
     // 跳转到登录页（使用 replace 避免浏览器后退问题）
     router.push("/login");

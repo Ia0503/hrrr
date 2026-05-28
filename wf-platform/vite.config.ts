@@ -26,27 +26,23 @@ interface MockMethod {
  * 替代 vite-plugin-mock（与 Vite 8.x 不兼容），
  * 使用 Vite 原生 configureServer 中间件拦截 /api/* 请求。
  */
-function createMockPlugin(mockPath: string) {
+function createMockPlugin(mockFilePath: string) {
   /* 使用绝对路径，避免 Vite 8 编译后相对路径漂移到 .vite-temp/ 目录 */
   const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 
   return {
     name: "vite-native-mock",
     async configureServer(server: { middlewares: Connect.Server }) {
-      /* 动态加载所有 mock 模块（使用绝对路径） */
-      const mockModules: MockMethod[] = [];
+      /* 动态加载统一 Mock 模块（使用绝对路径） */
+      let mockModules: MockMethod[] = [];
       try {
-        const { default: userMocks } = await import(
-          `file://${projectRoot}${mockPath}/user.ts`
+        const { default: mocks } = await import(
+          `file://${projectRoot}${mockFilePath}`
         );
-        const { default: taskMocks } = await import(
-          `file://${projectRoot}${mockPath}/task.ts`
-        );
-        mockModules.push(...(Array.isArray(userMocks) ? userMocks : [userMocks]));
-        mockModules.push(...(Array.isArray(taskMocks) ? taskMocks : [taskMocks]));
-        console.log(`[mock] ✅ 已加载 ${mockModules.length} 个 Mock 接口`);
+        mockModules = Array.isArray(mocks) ? mocks : [mocks];
+        console.log(`[MOCK] [INFO] 已加载 ${mockModules.length} 个 Mock 接口`);
       } catch (e) {
-        console.error("[mock] ❌ Mock 模块加载失败:", e);
+        console.error("[MOCK] [ERROR] Mock 模块加载失败:", e);
         return;
       }
 
@@ -75,7 +71,7 @@ function createMockPlugin(mockPath: string) {
             return next();
           }
 
-          console.log(`[mock] 🎭 ${reqMethod.toUpperCase()} ${reqUrl}`);
+          console.log(`[MOCK] [INFO] ${reqMethod.toUpperCase()} ${reqUrl}`);
 
           try {
             /* 解析 POST/PUT 请求体 */
@@ -114,7 +110,7 @@ function createMockPlugin(mockPath: string) {
             });
             res.end(JSON.stringify(result));
           } catch (err) {
-            console.error(`[mock] ❌ 处理 ${reqUrl} 异常:`, err);
+            console.error(`[MOCK] [ERROR] 处理 ${reqUrl} 异常:`, err);
             res.writeHead(500, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ code: 500, data: null, message: "Mock 内部错误" }));
           }
@@ -141,6 +137,6 @@ export default defineConfig({
   plugins: [
     vue(),
     tailwindcssVite(),
-    createMockPlugin("src/mock"),
+    createMockPlugin("src/mock.ts"),
   ],
 });

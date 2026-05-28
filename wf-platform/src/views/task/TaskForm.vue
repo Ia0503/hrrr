@@ -64,7 +64,7 @@ async function fetchUserList(): Promise<void> {
   try {
     const res = await request.get("/api/user/list");
     userList.value = res as UserOption[];
-    console.log(`[task-form] ✅ 负责人列表加载完成，共 ${userList.value.length} 个用户`);
+    console.log(`[task-form] [INFO] 负责人列表加载完成，共 ${userList.value.length} 个用户`);
 
     /** 同步更新 schema 中负责人选项 */
     const assigneeField = taskFormSchema.find((f) => f.field === "assignee");
@@ -79,7 +79,7 @@ async function fetchUserList(): Promise<void> {
       );
     }
   } catch (error) {
-    console.error("[task-form] ❌ 获取用户列表失败:", error);
+    console.error("[task-form] [ERROR] 获取用户列表失败:", error);
     ElMessage.warning("无法加载负责人列表，请刷新重试");
   } finally {
     loadingUsers.value = false;
@@ -271,13 +271,13 @@ watch(
           if (field in taskData) {
             const value = (taskData as any)[field];
             formModel.value[field] = value ?? undefined;
-            console.log(`[task-form]   ✓ 字段 [${field}] =`, JSON.stringify(value));
+            console.log(`[task-form]   [INFO] 字段 [${field}] =`, JSON.stringify(value));
           } else {
-            console.log(`[task-form]   ⚠ 字段 [${field}] 在任务数据中不存在，保留默认值`);
+            console.log(`[task-form]   [WARN] 字段 [${field}] 在任务数据中不存在，保留默认值`);
           }
         }
 
-        console.log("[task-form] ✅ 编辑模式数据填充完成");
+        console.log("[task-form] [INFO] 编辑模式数据填充完成");
       } else {
         resetFields();
         console.log("[task-form] 新建模式，表单已重置");
@@ -315,7 +315,7 @@ const handleSubmit = async () => {
       console.log("[task-form] 优先级为紧急，自动设置 isUrgent = true");
     }
 
-    console.log("[task-form] ✅ 表单提交数据:", JSON.stringify(formData, null, 2));
+    console.log("[task-form] [INFO] 表单提交数据:", JSON.stringify(formData, null, 2));
 
     /**
      * 编辑模式：将任务 ID 注入提交数据

@@ -226,7 +226,88 @@ import type {
   SchemaFormProps,
   SchemaFormEmits,
 } from "./types";
-import { getComponent } from "./config";
+import type { Component } from "vue";
+import {
+  ElInput,
+  ElInputNumber,
+  ElSelect,
+  ElRadioGroup,
+  ElCheckboxGroup,
+  ElSwitch,
+  ElSlider,
+  ElTimePicker,
+  ElDatePicker,
+  ElCascader,
+  ElRate,
+  ElColorPicker,
+} from "element-plus";
+import { ComponentType } from "./types";
+
+const componentMap = new Map<string, Component>([
+  [ComponentType.INPUT, ElInput],
+  [ComponentType.TEXTAREA, ElInput],
+  [ComponentType.INPUT_NUMBER, ElInputNumber],
+  [ComponentType.SELECT, ElSelect],
+  [ComponentType.RADIO, ElRadioGroup],
+  [ComponentType.CHECKBOX, ElCheckboxGroup],
+  [ComponentType.CASCADER, ElCascader],
+  [ComponentType.SWITCH, ElSwitch],
+  [ComponentType.SLIDER, ElSlider],
+  [ComponentType.TIME_PICKER, ElTimePicker],
+  [ComponentType.DATE_PICKER, ElDatePicker],
+  [ComponentType.DATE_RANGE_PICKER, ElDatePicker],
+  [ComponentType.RATE, ElRate],
+  [ComponentType.COLOR_PICKER, ElColorPicker],
+]);
+
+function getComponent(type: string): Component | null {
+  const component = componentMap.get(type);
+  if (component) {
+    console.log(`[schema-form-config] 获取组件: ${type}`);
+    return component;
+  }
+  console.warn(
+    `[schema-form-config] [WARN] 未注册的组件类型: ${type}，将回退到 ElInput`
+  );
+  return ElInput;
+}
+
+function registerComponent(type: string, component: Component): void {
+  componentMap.set(type, component);
+  console.log(`[schema-form-config] 注册自定义组件: ${type}`);
+}
+
+function hasComponent(type: string): boolean {
+  return componentMap.has(type);
+}
+
+function getRegisteredTypes(): string[] {
+  return Array.from(componentMap.keys());
+}
+
+function resetToDefaults(): void {
+  componentMap.clear();
+  const defaultEntries: [string, Component][] = [
+    [ComponentType.INPUT, ElInput],
+    [ComponentType.TEXTAREA, ElInput],
+    [ComponentType.INPUT_NUMBER, ElInputNumber],
+    [ComponentType.SELECT, ElSelect],
+    [ComponentType.RADIO, ElRadioGroup],
+    [ComponentType.CHECKBOX, ElCheckboxGroup],
+    [ComponentType.CASCADER, ElCascader],
+    [ComponentType.SWITCH, ElSwitch],
+    [ComponentType.SLIDER, ElSlider],
+    [ComponentType.TIME_PICKER, ElTimePicker],
+    [ComponentType.DATE_PICKER, ElDatePicker],
+    [ComponentType.DATE_RANGE_PICKER, ElDatePicker],
+    [ComponentType.RATE, ElRate],
+    [ComponentType.COLOR_PICKER, ElColorPicker],
+  ];
+  for (const [key, value] of defaultEntries) {
+    componentMap.set(key, value);
+  }
+  console.log("[schema-form-config] 已重置为内置组件映射");
+}
 
 const props = withDefaults(defineProps<SchemaFormProps>(), {
   labelWidth: "auto",

@@ -1,5 +1,16 @@
 /**
- * @fileoverview Schema 驱动表单核心 Composable（组合式函数）
+ * @file SchemaForm 表单引擎 Composable（核心逻辑层）
+ * @module composables/useSchemaForm
+ * @description 基于 JSON Schema 驱动的动态表单 composable，提供表单数据管理、校验规则生成、联动规则执行、
+ *             以及表单提交/重置等功能。是 SchemaForm 组件的核心逻辑实现。
+ *
+ * 依赖关系：
+ *   - 被引用于: components/SchemaForm/SchemaForm.vue, views/task/board.vue（新建/编辑任务弹窗）
+ *   - 依赖于: vue（ref, reactive, computed, watch）, async-validator, components/SchemaForm/types.ts
+ */
+
+/**
+ * Schema 驱动表单核心 Composable（组合式函数）
  *
  * 封装所有响应式状态与联动逻辑，是 schema-driven form engine 的核心入口。
  * 职责包括：
@@ -9,8 +20,6 @@
  *   - 核心：evaluateLinkages() —— 遍历所有联动规则并执行对应动作
  *   - 监听 formModel 变化自动触发联动评估
  *   - 暴露 validate / resetFields / clearValidate 等表单操作方法
- *
- * @module composables/useSchemaForm
  *
  * @example
  * ```ts
@@ -190,6 +199,7 @@ export function useSchemaForm(options: UseSchemaFormOptions): UseSchemaFormRetur
 
   // 首次调用构建规则
   buildRules();
+  console.log("[SchemaForm] [INFO] 初始化校验规则:", JSON.stringify(formRules.value, null, 2));
 
   /* ---------- 4. 表单引用（用于调用 el-form 的 validate/resetFields 等）---------- */
   const formRef = ref<any>(null);
@@ -299,8 +309,8 @@ export function useSchemaForm(options: UseSchemaFormOptions): UseSchemaFormRetur
          *      "setValue" → "set_Value"（t 和 V 之间插入 _）
          *      "visible"  → "visible"（无驼峰边界，不变）
          *   2. 全部转大写：
-         *      "set_Value" → "SET_VALUE"  ✅
-         *      "visible"   → "VISIBLE"    ✅
+         *      "set_Value" → "SET_VALUE"（示例：转换成功）
+         *      "visible"   → "VISIBLE"（示例：转换成功）
          *
          * ⚠️ 必须先插入下划线再转大写，反过来会导致全大写字符串无法区分驼峰边界
          */
@@ -408,7 +418,7 @@ export function useSchemaForm(options: UseSchemaFormOptions): UseSchemaFormRetur
 
             default: {
               console.warn(
-                `[schema-form] [联动] ⚠️ 未知的联动动作类型: ${String(rule.action)}，` +
+                `[schema-form] [联动] [WARN] 未知的联动动作类型: ${String(rule.action)}，` +
                 `规则 ID: ${rule.id || "anonymous"}`,
               );
               break;
@@ -481,16 +491,16 @@ export function useSchemaForm(options: UseSchemaFormOptions): UseSchemaFormRetur
    */
   async function validate(): Promise<boolean> {
     if (!formRef.value) {
-      console.warn("[schema-form] ⚠️ 表单 ref 未挂载，无法执行校验");
+      console.warn("[schema-form] [WARN] 表单 ref 未挂载，无法执行校验");
       return false;
     }
 
     try {
       await formRef.value.validate();
-      console.log("[schema-form] ✅ 表单校验通过");
+      console.log("[schema-form] [INFO] 表单校验通过");
       return true;
     } catch (errors) {
-      console.warn("[schema-form] ❌ 表单校验未通过:", errors);
+      console.warn("[schema-form] [ERROR] 表单校验未通过:", errors);
       return false;
     }
   }
@@ -514,7 +524,7 @@ export function useSchemaForm(options: UseSchemaFormOptions): UseSchemaFormRetur
       formRef.value.resetFields();
     }
 
-    console.log("[schema-form] 🔄 表单已重置，所有字段恢复默认值");
+    console.log("[schema-form] [INFO] 表单已重置，所有字段恢复默认值");
   }
 
   /**
@@ -527,7 +537,7 @@ export function useSchemaForm(options: UseSchemaFormOptions): UseSchemaFormRetur
    */
   function clearValidate(fields?: string[]): void {
     if (!formRef.value) {
-      console.warn("[schema-form] ⚠️ 表单 ref 未挂载，无法清除校验状态");
+      console.warn("[schema-form] [WARN] 表单 ref 未挂载，无法清除校验状态");
       return;
     }
 
@@ -550,7 +560,7 @@ export function useSchemaForm(options: UseSchemaFormOptions): UseSchemaFormRetur
   function getFormData(): Record<string, unknown> {
     const data = { ...formModel.value };
     console.log(
-      `[schema-form] 📋 获取表单数据快照，共 ${Object.keys(data).length} 个字段`,
+      `[schema-form] [INFO] 获取表单数据快照，共 ${Object.keys(data).length} 个字段`,
     );
     return data;
   }

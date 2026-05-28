@@ -1,4 +1,15 @@
 /**
+ * @file App Store - 应用级全局状态管理
+ * @module stores/app
+ * @description 使用 Pinia Setup Store 风格管理应用级全局状态，主要包括主题模式切换（亮色/暗色）、
+ *             持久化到 localStorage、系统暗色偏好跟随等功能。
+ *
+ * 依赖关系：
+ *   - 被引用于: App.vue, 全局需要主题切换功能的组件
+ *   - 依赖于: pinia, vue（ref）
+ */
+
+/**
  * App Store - 应用级全局状态管理
  * ============================
  *
@@ -49,7 +60,7 @@ export const useAppStore = defineStore("app", () => {
 
     applyTheme(newTheme);
 
-    console.log(`[app-store] 🎨 主题已切换: ${theme.value} → ${newTheme}`);
+    console.log(`[app-store] [INFO] 主题已切换: ${theme.value} → ${newTheme}`);
   }
 
   /**
@@ -74,7 +85,7 @@ export const useAppStore = defineStore("app", () => {
     try {
       localStorage.setItem(THEME_STORAGE_KEY, targetTheme);
     } catch (error: unknown) {
-      console.warn("[app-store] ⚠️ 无法写入 localStorage:", error);
+      console.warn("[app-store] [WARN] 无法写入 localStorage:", error);
       /* 隐私模式下可能抛出异常，静默降级 */
     }
   }
@@ -97,13 +108,13 @@ export const useAppStore = defineStore("app", () => {
     const savedTheme = readSavedTheme();
     if (savedTheme) {
       resolvedTheme = savedTheme;
-      console.log(`[app-store] 📖 从 localStorage 读取到保存的主题: ${resolvedTheme}`);
+      console.log(`[app-store] [INFO] 从 localStorage 读取到保存的主题: ${resolvedTheme}`);
     } else {
       /* 步骤2：无本地记录时，读取系统偏好 */
       const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
       resolvedTheme = systemPrefersDark ? "dark" : "light";
       console.log(
-        `[app-store] 💻 无本地记录，跟随系统偏好: ${resolvedTheme} (prefers-color-scheme: ${
+        `[app-store] [INFO] 无本地记录，跟随系统偏好: ${resolvedTheme} (prefers-color-scheme: ${
           systemPrefersDark ? "dark" : "light"
         })`,
       );
@@ -115,7 +126,7 @@ export const useAppStore = defineStore("app", () => {
     /* 步骤3：注册系统偏好变化监听（仅在用户未手动设置过时自动跟随）*/
     setupSystemPreferenceListener();
 
-    console.log(`[app-store] ✅ 主题初始化完成，当前模式: ${theme.value}`);
+    console.log(`[app-store] [INFO] 主题初始化完成，当前模式: ${theme.value}`);
   }
 
   /**
@@ -132,7 +143,7 @@ export const useAppStore = defineStore("app", () => {
       return null; /* 值不合法视为无记录 */
     } catch (error: unknown) {
       /* localStorage 不可读（如隐私模式）*/
-      console.warn("[app-store] ⚠️ 无法读取 localStorage:", error);
+      console.warn("[app-store] [WARN] 无法读取 localStorage:", error);
       return null;
     }
   }
@@ -145,7 +156,7 @@ export const useAppStore = defineStore("app", () => {
    */
   function setupSystemPreferenceListener(): void {
     if (!window.matchMedia) {
-      console.warn("[app-store] ⚠️ 当前环境不支持 matchMedia API");
+      console.warn("[app-store] [WARN] 当前环境不支持 matchMedia API");
       return;
     }
 
@@ -160,7 +171,7 @@ export const useAppStore = defineStore("app", () => {
       const hasManualOverride = localStorage.getItem(THEME_STORAGE_KEY) !== null;
       if (hasManualOverride) {
         console.log(
-          `[app-store] 🔒 系统暗色偏好变化(${event.matches ? "dark" : "light"})，但用户已手动设置，忽略`,
+          `[app-store] [INFO] 系统暗色偏好变化(${event.matches ? "dark" : "light"})，但用户已手动设置，忽略`,
         );
         return;
       }
@@ -169,7 +180,7 @@ export const useAppStore = defineStore("app", () => {
       const newTheme: ThemeMode = event.matches ? "dark" : "light";
       applyTheme(newTheme);
       console.log(
-        `[app-store] 🔄 跟随系统偏好变化 → ${newTheme}`,
+        `[app-store] [INFO] 跟随系统偏好变化 → ${newTheme}`,
       );
     };
 
@@ -181,7 +192,7 @@ export const useAppStore = defineStore("app", () => {
       (systemMediaQuery as MediaQueryList & { addListener: (fn: (e: MediaQueryListEvent) => void) => void }).addListener(systemChangeListener!);
     }
 
-    console.log("[app-store] 👂 已注册系统偏好变化监听器");
+    console.log("[app-store] [INFO] 已注册系统偏好变化监听器");
   }
 
   /**
@@ -197,7 +208,7 @@ export const useAppStore = defineStore("app", () => {
       }
       systemMediaQuery = null;
       systemChangeListener = null;
-      console.log("[app-store] 🧹 已清理系统偏好监听器");
+      console.log("[app-store] [INFO] 已清理系统偏好监听器");
     }
   }
 

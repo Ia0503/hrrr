@@ -22,6 +22,16 @@
 -->
 <script setup lang="ts">
 /**
+ * @file 登录页面组件
+ * @module views/login
+ * @description 提供用户名/密码表单登录功能，包含基础表单验证（非空、长度限制）、登录状态管理、
+ *             错误提示显示以及登录成功后的路由跳转。使用 Vue 3 Composition API + TypeScript 实现。
+ *
+ * 依赖关系：
+ *   - 被引用于: 路由配置 /router/index.ts（登录页路由）
+ *   - 依赖于: stores/user.ts, vue-router, vue
+ */
+/**
  * Login 组件
  * 使用 Vue 3 Composition API + TypeScript
  *
@@ -175,7 +185,7 @@ function validateUsername(): boolean {
   // 验证通过（清空该字段的错误提示）
   fieldErrors.username = "";
   formValidated.username = true;
-  console.log(`[login] ✅ 用户名验证通过: ${username}`);
+  console.log(`[login] [INFO] 用户名验证通过: ${username}`);
   return true;
 }
 
@@ -216,7 +226,7 @@ function validatePassword(): boolean {
   // 验证通过（⚠️ 不要输出密码内容到日志）
   fieldErrors.password = "";
   formValidated.password = true;
-  console.log("[login] ✅ 密码验证通过");
+  console.log("[login] [INFO] 密码验证通过");
   return true;
 }
 
@@ -293,7 +303,7 @@ async function handleLogin(): Promise<void> {
       return; // 验证失败，终止提交流程
     }
 
-    console.log("[login] ✅ 表单验证通过，准备提交...");
+    console.log("[login] [INFO] 表单验证通过，准备提交...");
 
     // 步骤3：设置加载状态（防止重复提交）
     isLoading.value = true;
@@ -304,7 +314,7 @@ async function handleLogin(): Promise<void> {
       password: loginForm.password,
     });
 
-    console.log("[login] ✅ 登录成功，准备跳转...");
+    console.log("[login] [INFO] 登录成功，准备跳转...");
 
     // 步骤5：确定跳转目标地址
     /**
@@ -317,13 +327,13 @@ async function handleLogin(): Promise<void> {
      */
     const redirectPath = "/dashboard";
 
-    console.log(`[login] 🔄 跳转到目标地址: ${redirectPath}`);
+    console.log(`[login] [INFO] 跳转到目标地址: ${redirectPath}`);
 
     // 步骤6：编程式导航跳转
     router.push(redirectPath);
   } catch (error: unknown) {
     // 统一错误处理
-    console.error("[login] ❌ 登录失败:", error);
+    console.error("[login] [ERROR] 登录失败:", error);
 
     /**
      * 错误类型判断与友好提示
