@@ -238,6 +238,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 24px;
+  transition: var(--wf-transition-theme);
 }
 
 /* ==================== 欢迎区域样式 ==================== */
@@ -279,9 +280,9 @@ onUnmounted(() => {
 
 .wf-dashboard__card {
   padding: 24px;
-  background-color: #ffffff;
+  background-color: var(--wf-bg-surface);
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--wf-shadow-md);
   transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
@@ -294,14 +295,14 @@ onUnmounted(() => {
   margin: 0 0 16px;
   font-size: 18px;
   font-weight: 600;
-  color: #333333;
+  color: var(--wf-text-primary);
   padding-bottom: 12px;
-  border-bottom: 2px solid #f0f0f0;
+  border-bottom: 2px solid var(--wf-border-light);
 }
 
 .wf-dashboard__card-content {
   font-size: 14px;
-  color: #666666;
+  color: var(--wf-text-secondary);
 }
 
 /* ==================== 角色信息样式 ==================== */
@@ -319,8 +320,8 @@ onUnmounted(() => {
   font-size: 13px;
   font-weight: 500;
   border-radius: 4px;
-  background-color: #f0f0f0;
-  color: #666666;
+  background-color: var(--wf-bg-surface-alt);
+  color: var(--wf-text-secondary);
 }
 
 .wf-dashboard__tag--admin {
@@ -338,7 +339,7 @@ onUnmounted(() => {
 .wf-dashboard__role-desc {
   margin: 0;
   font-size: 13px;
-  color: #999999;
+  color: var(--wf-text-muted);
   font-style: italic;
 }
 
@@ -354,43 +355,50 @@ onUnmounted(() => {
   align-items: center;
   gap: 10px;
   padding: 6px 0;
-  border-bottom: 1px dashed #f0f0f0;
+  border-bottom: 1px dashed var(--wf-border-light);
 }
 
 .wf-dashboard__permission-item:last-child {
   border-bottom: none;
 }
 
+/** 管理员全部权限高亮行 */
 .wf-dashboard__permission-item--all {
-  background-color: #fffbe6;
+  background-color: var(--wf-bg-surface-alt); /* 使用主题变量替代硬编码 #fffbe6 */
   padding: 6px 10px;
   border-radius: 4px;
   border-bottom: none;
 }
 
+/**
+ * 权限码代码样式
+ * 亮色模式：蓝字 + 浅灰底（保持原有风格）
+ * 暗色模式：稍柔和的蓝 + 暗底
+ */
 .wf-dashboard__permission-code {
   display: inline-block;
   padding: 2px 8px;
   font-family: "Courier New", Consolas, monospace;
   font-size: 13px;
-  color: #1890ff;
-  background-color: #f5f5f5;
+  color: var(--color-brand-500); /* 使用主题变量替代硬编码 #1890ff */
+  background-color: var(--wf-bg-surface-alt);
   border-radius: 3px;
 }
 
+/** 全部权限徽章 */
 .wf-dashboard__permission-badge {
   display: inline-block;
   padding: 2px 8px;
   font-size: 11px;
   font-weight: bold;
-  color: #ffffff;
-  background-color: #faad14;
+  color: var(--wf-text-inverse); /* 使用主题变量替代硬编码 #fff */
+  background-color: var(--wf-color-warning); /* 使用主题变量替代硬编码 #faad14 */
   border-radius: 10px;
 }
 
 .wf-dashboard__empty-hint {
   margin: 0;
-  color: #999999;
+  color: var(--wf-text-muted);
   text-align: center;
   padding: 20px 0;
 }

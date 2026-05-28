@@ -33,6 +33,16 @@ interface StoredTask {
   tags?: string[];
   createdAt: string;
   orderIndex: number;
+  /** 任务类型：feature/bug/improvement/tech_debt/doc */
+  taskType?: string;
+  /** 截止日期，格式 YYYY-MM-DD */
+  dueDate?: string;
+  /** 预估工时（小时）*/
+  estimatedHours?: number;
+  /** 复杂度评分（1-5）*/
+  complexity?: number;
+  /** 是否加急标记 */
+  isUrgent?: boolean;
 }
 
 /**
@@ -72,6 +82,10 @@ function initPresetTasks(): StoredTask[] {
       tags: pickTags(tagPool),
       createdAt: Random.datetime("yyyy-MM-dd HH:mm:ss"),
       orderIndex: 0,
+      taskType: "feature",
+      dueDate: "2026-06-15",
+      estimatedHours: 16,
+      complexity: 4,
     },
     {
       id: 1002,
@@ -83,6 +97,10 @@ function initPresetTasks(): StoredTask[] {
       tags: pickTags(tagPool),
       createdAt: Random.datetime("yyyy-MM-dd HH:mm:ss"),
       orderIndex: 1,
+      taskType: "improvement",
+      dueDate: "2026-06-20",
+      estimatedHours: 8,
+      complexity: 3,
     },
     {
       id: 1003,
@@ -94,6 +112,10 @@ function initPresetTasks(): StoredTask[] {
       tags: pickTags(tagPool),
       createdAt: Random.datetime("yyyy-MM-dd HH:mm:ss"),
       orderIndex: 2,
+      taskType: "feature",
+      dueDate: "2026-06-30",
+      estimatedHours: 24,
+      complexity: 5,
     },
 
     /* ---------- 进行中列 (doing) ---------- */
@@ -107,6 +129,11 @@ function initPresetTasks(): StoredTask[] {
       tags: pickTags(tagPool),
       createdAt: Random.datetime("yyyy-MM-dd HH:mm:ss"),
       orderIndex: 0,
+      taskType: "feature",
+      dueDate: "2026-05-31",
+      estimatedHours: 40,
+      complexity: 5,
+      isUrgent: true,
     },
     {
       id: 2002,
@@ -118,6 +145,10 @@ function initPresetTasks(): StoredTask[] {
       tags: pickTags(tagPool),
       createdAt: Random.datetime("yyyy-MM-dd HH:mm:ss"),
       orderIndex: 1,
+      taskType: "feature",
+      dueDate: "2026-06-05",
+      estimatedHours: 12,
+      complexity: 3,
     },
 
     /* ---------- 已完成列 (done) ---------- */
@@ -131,6 +162,9 @@ function initPresetTasks(): StoredTask[] {
       tags: ["后端开发"],
       createdAt: Random.datetime("yyyy-MM-dd HH:mm:ss"),
       orderIndex: 0,
+      taskType: "tech_debt",
+      estimatedHours: 4,
+      complexity: 2,
     },
     {
       id: 3002,
@@ -142,6 +176,9 @@ function initPresetTasks(): StoredTask[] {
       tags: ["前端开发", "UI设计"],
       createdAt: Random.datetime("yyyy-MM-dd HH:mm:ss"),
       orderIndex: 1,
+      taskType: "feature",
+      estimatedHours: 6,
+      complexity: 2,
     },
   ];
 }
@@ -214,6 +251,11 @@ export default [
         tags: (data.tags as string[]) || undefined,
         createdAt: new Date().toISOString(),
         orderIndex: 0,
+        taskType: data.taskType as string | undefined,
+        dueDate: data.dueDate as string | undefined,
+        estimatedHours: data.estimatedHours as number | undefined,
+        complexity: data.complexity as number | undefined,
+        isUrgent: data.isUrgent as boolean | undefined,
       };
 
       /* 写入统一存储（与拖拽更新共享同一数据源）*/
@@ -270,44 +312,55 @@ export default [
       }
 
       /**
-       * 在目标列中重新排列任务顺序
+       * 列内排序重排（仅拖拽场景触发）
        *
-       * 关键问题：Mock 的 taskStore 与前端 Pinia store 是独立数据源，
-       * 前端 VueDraggable 通过 v-model 改了前端数组的顺序，
-       * 但 Mock 这边不知道新的顺序是什么。
+       * 【设计要点】
+       * - 拖拽场景：前端会传 newStatus（跨列）或 newIndex（同列），需要重排 orderIndex
+       * - 编辑场景：只传字段值（title/description 等），不触发布局变更，跳过重排
        *
-       * 解决方案：将目标列的所有任务按 orderIndex 排序后，
-       * 用 splice 把被移动的任务从旧位置拔出，插入到 newIndex 位置。
+       * 判定条件：请求中包含 newStatus 或 newIndex 时才进入排序逻辑
        */
-      const targetStatus = taskStore[taskIndex].status;
-      const columnTasks = taskStore.filter((t) => t.status === targetStatus);
+      const isDragOperation = newStatus !== undefined && newStatus !== null
+        || body?.newIndex !== undefined;
 
-      /** 按 orderIndex 排序获取当前 Mock 认为的正确顺序 */
-      const sortedColumn = [...columnTasks].sort((a, b) => a.orderIndex - b.orderIndex);
+      if (isDragOperation) {
+        const targetStatus = taskStore[taskIndex].status;
+        const columnTasks = taskStore.filter((t) => t.status === targetStatus);
 
-      /** 找到被移动任务在排序后数组中的位置 */
-      const movedIndexInSorted = sortedColumn.findIndex((t) => t.id === taskId);
+        /** 按 orderIndex 排序获取当前 Mock 认为的正确顺序 */
+        const sortedColumn = [...columnTasks].sort((a, b) => a.orderIndex - b.orderIndex);
 
-      if (movedIndexInSorted !== -1) {
-        /** 从排序数组中取出被移动的任务 */
-        const [movedTask] = sortedColumn.splice(movedIndexInSorted, 1);
+        /** 找到被移动任务在排序后数组中的位置 */
+        const movedIndexInSorted = sortedColumn.findIndex((t) => t.id === taskId);
 
-        /**
-         * 确定插入位置
-         * 跨列场景：newIndex 来自 evt.newIndex（VueDraggable 提供的目标位置）
-         * 同列场景：同样使用 evt.newIndex
-         * 由于前端没传 newIndex 到 Mock（已移除），默认插到末尾
-         */
-        const insertIdx = Math.min(Number(body?.newIndex ?? sortedColumn.length), sortedColumn.length);
-        sortedColumn.splice(insertIdx, 0, movedTask);
+        if (movedIndexInSorted !== -1) {
+          /** 从排序数组中取出被移动的任务 */
+          const [movedTask] = sortedColumn.splice(movedIndexInSorted, 1);
 
-        /** 将排列后的顺序写回 taskStore：重新分配 orderIndex */
-        sortedColumn.forEach((t, idx) => {
-          const storeIdx = taskStore.findIndex((st => st.id === t.id));
-          if (storeIdx !== -1) {
-            taskStore[storeIdx].orderIndex = idx;
-          }
-        });
+          /**
+           * 确定插入位置
+           * 跨列场景：newIndex 来自 evt.newIndex（VueDraggable 提供的目标位置）
+           * 同列场景：同样使用 evt.newIndex
+           * 未传 newIndex 时默认插到末尾
+           */
+          const insertIdx = Math.min(
+            Number(body?.newIndex ?? sortedColumn.length),
+            sortedColumn.length,
+          );
+          sortedColumn.splice(insertIdx, 0, movedTask);
+
+          /** 将排列后的顺序写回 taskStore：重新分配 orderIndex */
+          sortedColumn.forEach((t, idx) => {
+            const storeIdx = taskStore.findIndex((st) => st.id === t.id);
+            if (storeIdx !== -1) {
+              taskStore[storeIdx].orderIndex = idx;
+            }
+          });
+
+          console.log(
+            `[mock] 🔄 拖拽重排完成: 列[${targetStatus}] 共 ${columnTasks.length} 个任务`,
+          );
+        }
       }
 
       /* 支持其他字段的增量更新 */
@@ -316,9 +369,15 @@ export default [
       if (body?.assignee !== undefined) taskStore[taskIndex].assignee = body.assignee as string | undefined;
       if (body?.tags !== undefined) taskStore[taskIndex].tags = body.tags as string[] | undefined;
       if (body?.description !== undefined) taskStore[taskIndex].description = body.description as string | undefined;
+      if (body?.taskType !== undefined) taskStore[taskIndex].taskType = body.taskType as string | undefined;
+      if (body?.dueDate !== undefined) taskStore[taskIndex].dueDate = body.dueDate as string | undefined;
+      if (body?.estimatedHours !== undefined) taskStore[taskIndex].estimatedHours = body.estimatedHours as number | undefined;
+      if (body?.complexity !== undefined) taskStore[taskIndex].complexity = body.complexity as number | undefined;
+      if (body?.isUrgent !== undefined) taskStore[taskIndex].isUrgent = body.isUrgent as boolean | undefined;
 
       console.log(
-        `[mock] ✅ 任务已更新: id=${taskId}, status: ${oldStatus} → ${targetStatus}, 列 [${targetStatus}] 共 ${columnTasks.length} 个任务已重排`,
+        `[mock] ✅ 任务已更新: id=${taskId}` +
+        (isDragOperation ? `, status: ${oldStatus} → ${targetStatus}, 列 [${targetStatus}] 已重排` : ", 字段已更新"),
       );
 
       return { code: 0, data: { success: true, taskId }, message: "更新成功" };

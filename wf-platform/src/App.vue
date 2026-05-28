@@ -2,8 +2,27 @@
 /**
  * 根组件
  * 作为路由出口的顶层容器
- * 使用 DefaultLayout 包裹所有页面内容
+ * 负责应用级初始化（主题、全局状态等）
  */
+import { onMounted } from "vue";
+import { useAppStore } from "@/stores/app";
+
+/* 获取 App Store 实例 */
+const appStore = useAppStore();
+
+/**
+ * 应用挂载完成后执行全局初始化
+ *
+ * 初始化顺序：
+ *   1. 主题模式（从 localStorage 或系统偏好恢复）
+ *   2. （未来可扩展：国际化语言、全局配置等）
+ */
+onMounted(() => {
+  console.log("[App] 🚀 根组件已挂载，开始全局初始化");
+
+  /* 初始化主题（必须在组件渲染前确定，但防闪烁由 index.html 处理）*/
+  appStore.initTheme();
+});
 </script>
 
 <template>

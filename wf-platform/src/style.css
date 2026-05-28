@@ -1,10 +1,24 @@
 @import "tailwindcss";
 
 /* ============================================================
+ * Tailwind v4 暗色模式配置
+ *
+ * 策略说明：
+ *   - 使用 'class' 策略（而非 'media' 媒体查询）
+ *   - 需要手动给 <html> 添加/移除 'dark' 类名来切换主题
+ *   - 好处：可由用户手动控制，不跟随系统偏好时也能保持一致
+ *
+ * Tailwind v4 语法：
+ *   @custom-variant dark (...) 定义 dark: 前缀的选择器匹配规则
+ *   &:where(.dark, .dark *) 匹配 .dark 及其所有后代元素
+ * ============================================================ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ============================================================
  * wf-platform 全局样式入口
  *
  * 设计规范：
- * - 色彩体系：基于灰阶 + 品牌蓝 (#4f6ef7) 作为主色调
+ * - 色彩体系：基于 CSS 变量的双主题（亮色/暗色）
  * - 字体：系统默认字体栈（中文优先）
  * - 间距：4px 基准网格 (Tailwind 默认)
  * - 圆角：统一 8px 小组件 / 12px 弹窗卡片
@@ -22,15 +36,6 @@
   --color-brand-600: #4f46e5;
   --color-brand-700: #4338ca;
 
-  /* 中性色扩展 */
-  --color-surface: #ffffff;
-  --color-surface-alt: #f8f9fb;
-  --color-border-light: #ebeef5;
-  --color-border-default: #dcdfe6;
-  --color-text-primary: #1f2937;
-  --color-text-secondary: #6b7280;
-  --color-text-muted: #9ca3af;
-
   /* 字体 */
   --font-sans: "Inter", "SF Pro Display", "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
 
@@ -39,11 +44,100 @@
   --radius-md: 8px;
   --radius-lg: 12px;
   --radius-xl: 16px;
+}
+
+/* ============================================================
+ * 主题 CSS 变量系统（双模式：亮色 / 暗色）
+ *
+ * 命名规范：--wf-{类别}-{属性}
+ * 类别：bg(背景) / text(文字) / border(边框) / surface(表面)
+ *
+ * 使用方式：
+ *   所有自定义组件样式中引用这些变量，而非硬编码颜色值
+ *   例：background-color: var(--wf-bg-page);
+ *       color: var(--wf-text-primary);
+ * ============================================================ */
+
+/* ---- 亮色模式（默认）---- */
+:root {
+  /* 页面级背景 */
+  --wf-bg-body: #f5f7fa;           /* body / 全局背景 */
+  --wf-bg-page: #f0f2f5;           /* 页面内容区背景（如看板）*/
+  --wf-bg-surface: #ffffff;        /* 卡片/面板/弹窗背景 */
+  --wf-bg-surface-alt: #fafbfc;    /* 交替表面（如表头、斑马纹）*/
+  --wf-bg-surface-raised: #ffffff; /* 浮起表面（如下拉菜单）*/
+
+  /* 文字颜色 */
+  --wf-text-primary: #1d2129;      /* 主要文字（标题、正文）*/
+  --wf-text-secondary: #4e5969;    /* 次要文字（描述、辅助信息）*/
+  --wf-text-muted: #86909c;        /* 弱化文字（占位符、时间戳）*/
+  --wf-text-inverse: #ffffff;      /* 反色文字（用于深色背景上）*/
+
+  /* 边框颜色 */
+  --wf-border-light: #e5e6eb;      /* 轻边框（卡片内分割线）*/
+  --wf-border-default: #c9cdd4;    /* 默认边框（输入框、表格）*/
+  --wf-border-strong: #a2a3ad;     /* 强边框（聚焦态）*/
+
+  /* 侧边栏 */
+  --wf-sidebar-bg: #001529;        /* 侧边栏背景 */
+  --wf-sidebar-text: #ffffffa6;    /* 侧边栏文字（半透明白）*/
+  --wf-sidebar-active: #409eff;     /* 侧边栏激活项 */
+
+  /* Header 导航栏 */
+  --wf-header-bg: #ffffff;         /* Header 背景 */
+  --wf-header-border: #e8e8e8;     /* Header 底部边框 */
 
   /* 阴影 */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --wf-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --wf-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --wf-shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08);
+
+  /* 状态色保持不变（品牌色等不受暗色影响）*/
+  --wf-color-success: #52c41a;
+  --wf-color-warning: #faad14;
+  --wf-color-danger: #ff4d4f;
+  --wf-color-info: #1890ff;
+
+  /* 过渡动画 */
+  --wf-transition-theme: background-color 0.25s ease,
+                       color 0.25s ease,
+                       border-color 0.25s ease,
+                       box-shadow 0.25s ease;
+}
+
+/* ---- 暗色模式 ---- */
+html.dark {
+  /* 页面级背景 */
+  --wf-bg-body: #141414;           /* 深黑底色 */
+  --wf-bg-page: #1a1a1a;           /* 内容区稍亮 */
+  --wf-bg-surface: #1f1f1f;        /* 卡片/面板 */
+  --wf-bg-surface-alt: #262626;    /* 交替表面 */
+  --wf-bg-surface-raised: #2a2a2a; /* 浮起表面 */
+
+  /* 文字颜色 */
+  --wf-text-primary: #e5e6eb;      /* 浅灰主文字 */
+  --wf-text-secondary: #c9cdd4;    /* 次要文字 */
+  --wf-text-muted: #86909c;        /* 弱化文字（与亮色相近或更淡）*/
+  --wf-text-inverse: #1d2129;      /* 反色（用于亮色背景上）*/
+
+  /* 边框颜色 */
+  --wf-border-light: #363636;      /* 暗色轻边框 */
+  --wf-border-default: #4e5969;    /* 暗色默认边框 */
+  --wf-border-strong: #6b7280;     /* 暗色强边框 */
+
+  /* 侧边栏 */
+  --wf-sidebar-bg: #000d1a;        /* 更深的侧边栏 */
+  --wf-sidebar-text: #ffffff99;    /* 稍微降低透明度 */
+  --wf-sidebar-active: #409eff;     /* 保持蓝色激活态 */
+
+  /* Header 导航栏 */
+  --wf-header-bg: #1f1f1f;         /* 暗色 Header */
+  --wf-header-border: #2a2a2a;     /* 暗色分割线 */
+
+  /* 阴影（暗色下阴影用透明度而非黑色）*/
+  --wf-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --wf-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --wf-shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.45);
 }
 
 /* ==================== 全局重置与基础样式 ==================== */
@@ -66,9 +160,10 @@ html {
 
 body {
   font-family: var(--font-sans);
-  color: var(--color-text-primary);
-  background-color: var(--color-surface-alt);
+  color: var(--wf-text-primary); /* 使用主题变量 */
+  background-color: var(--wf-bg-body); /* 使用主题变量 */
   overflow-x: hidden;
+  transition: var(--wf-transition-theme); /* 主题切换时平滑过渡 */
 }
 
 /* 链接默认样式 */
@@ -89,12 +184,12 @@ a:hover {
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: #c0c4cc;
+  background-color: var(--wf-border-default); /* 使用主题变量 */
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: #909399;
+  background-color: var(--wf-text-muted);
 }
 
 ::-webkit-scrollbar-track {
@@ -104,7 +199,7 @@ a:hover {
 /* Firefox 滚动条 */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #c0c4cc transparent;
+  scrollbar-color: var(--wf-border-default) transparent;
 }
 
 /* ==================== Element Plus 全局覆盖 ==================== */
@@ -162,7 +257,7 @@ a:hover {
 /* ---- 对话框 Dialog ---- */
 .el-dialog {
   border-radius: var(--radius-lg) !important;
-  box-shadow: var(--shadow-lg), 0 20px 60px rgba(0, 0, 0, 0.1) !important;
+  box-shadow: var(--wf-shadow-lg), 0 20px 60px rgba(0, 0, 0, 0.15) !important;
 }
 
 .el-overlay-dialog {
@@ -173,7 +268,7 @@ a:hover {
 .el-card {
   border-radius: var(--radius-md) !important;
   border: none !important;
-  box-shadow: var(--shadow-sm) !important;
+  box-shadow: var(--wf-shadow-sm) !important;
 }
 
 /* ---- 表格 Table ---- */
@@ -183,8 +278,8 @@ a:hover {
 }
 
 .el-table th.el-table__cell {
-  background-color: #fafbfc !important;
-  color: var(--color-text-secondary) !important;
+  background-color: var(--wf-bg-surface-alt) !important; /* 使用主题变量 */
+  color: var(--wf-text-secondary) !important;
   font-weight: 600;
   font-size: 13px;
 }
@@ -192,7 +287,7 @@ a:hover {
 /* ---- 消息提示 Message ---- */
 .el-message {
   border-radius: var(--radius-sm) !important;
-  box-shadow: var(--shadow-md) !important;
+  box-shadow: var(--wf-shadow-md) !important;
 }
 
 /* ---- 分页 Pagination ---- */
@@ -203,7 +298,7 @@ a:hover {
 
 /* ==================== 工具类 ==================== */
 
-/* 文本截断（单行） */
+/* 文本截断（单行）*/
 .text-truncate {
   overflow: hidden;
   text-overflow: ellipsis;

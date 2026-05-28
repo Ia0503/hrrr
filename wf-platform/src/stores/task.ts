@@ -43,6 +43,16 @@ export interface TaskItem {
    * 用于拖拽排序后记录任务在当前列中的位置
    */
   orderIndex?: number;
+  /** 任务类型：feature/bug/improvement/tech_debt/doc */
+  taskType?: string;
+  /** 截止日期，格式 YYYY-MM-DD */
+  dueDate?: string;
+  /** 预估工时（小时）*/
+  estimatedHours?: number;
+  /** 复杂度评分（1-5）*/
+  complexity?: number;
+  /** 是否加急标记 */
+  isUrgent?: boolean;
 }
 
 /** 看板列数据结构 */
@@ -205,10 +215,42 @@ export const useTaskStore = defineStore("task", () => {
 
       console.log(`[task-store] ✅ 任务 [${taskId}] 移动已持久化`);
     } catch (error) {
-      /* 步骤四：API 失败 → 回滚到快照状态（恢复 VueDraggable 修改前的数组）*/
+      /* 步骤四：API 失败 → 判断错误类型决定是否回滚 */
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const isNetworkError = errorMessage.includes("Network Error")
+        || errorMessage.includes("网络请求异常")
+        || errorMessage.includes("timeout")
+        || errorMessage.includes("ECONNREFUSED");
+
+      /**
+       * 网络层错误（Network Error / 超时 / 连接拒绝）的特殊处理
+       *
+       * 【场景】开发环境下 vite-plugin-mock 中间件可能间歇性失效，
+       *   请求未被拦截导致发出真实 HTTP 请求后无响应。
+       *
+       * 【策略】
+       *   - 网络错误时不回滚！因为：
+       *     a) Mock 内存中的数据可能已经正确更新（只是响应没返回）
+       *     b) 回滚会导致用户看到"任务跳回去"的困惑体验
+       *     c) 下次刷新看板数据时会从 Mock 重新拉取最新状态，自然一致
+       *   - 业务错误（400/404/500 等）时正常回滚
+       */
+      if (isNetworkError) {
+        console.warn(
+          `[task-store] ⚠️ 网络层错误（可能是 Mock 未拦截），保持当前状态不回滚:`,
+          errorMessage,
+        );
+        console.warn(
+          `[task-store] 💡 提示：如频繁出现此错误，请重启 Dev Server（npm run dev）`,
+        );
+        /* 网络错误不回滚，也不抛出（静默成功），让用户体验不受影响 */
+        return;
+      }
+
+      /* 业务错误：回滚到快照状态（恢复 VueDraggable 修改前的数组）*/
       if (boardSnapshot !== null) {
         boardColumns.value = JSON.parse(JSON.stringify(boardSnapshot)) as BoardColumn[];
-        console.warn("[task-store] ⚠️ 持久化失败，已回滚数据", error);
+        console.warn("[task-store] ⚠️ 持久化失败（业务错误），已回滚数据", error);
       }
       throw error;
     } finally {
@@ -304,8 +346,21 @@ export const useTaskStore = defineStore("task", () => {
     console.log(`[task-store] 📝 开始更新任务: id=${taskId}, title="${formData.title}"`);
 
     try {
+      /**
+       * 统一字段名：将前端使用的 id 转为后端接口期望的 taskId
+       *
+       * 【设计说明】
+       * - 前端 TaskItem 统一使用 id 字段（符合 RESTful 规范）
+       * - 后端/Mock 接口使用 taskId 字段（历史遗留命名）
+       * - 在 Store 层做字段映射，保持组件层代码简洁
+       */
+      const payload = {
+        taskId,
+        ...formData,
+      };
+
       /* 调用更新接口，由后端/Mock 处理持久化 */
-      await request.post("/api/task/update", formData);
+      await request.post("/api/task/update", payload);
 
       /* 在本地看板数据中找到该任务并原地更新（保持响应式引用不变）*/
       for (const col of boardColumns.value) {

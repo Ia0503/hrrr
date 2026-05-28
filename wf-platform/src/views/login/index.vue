@@ -551,6 +551,7 @@ function handleKeyPress(event: KeyboardEvent): void {
   padding: 20px; /* 内边距（移动端适配） */
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   /* 渐变背景色（紫色系，现代感强） */
+  transition: var(--wf-transition-theme); /* 主题切换过渡动画 */
 }
 
 /* ==================== 登录卡片样式 ==================== */
@@ -568,11 +569,9 @@ function handleKeyPress(event: KeyboardEvent): void {
   width: 100%;
   max-width: 400px;
   padding: 40px;
-  background-color: #ffffff;
+  background-color: var(--wf-bg-surface);
   border-radius: 8px; /* 圆角半径 8px */
-  box-shadow:
-    0 10px 25px rgba(0, 0, 0, 0.15),
-    /* 主阴影 */ 0 6px 10px rgba(0, 0, 0, 0.1); /* 辅助阴影（层次感） */
+  box-shadow: var(--wf-shadow-lg); /* 卡片大阴影（层次感） */
 }
 
 /** 页面主标题 */
@@ -580,7 +579,7 @@ function handleKeyPress(event: KeyboardEvent): void {
   margin: 0 0 8px; /* 下边距 8px */
   font-size: 28px;
   font-weight: bold;
-  color: #1890ff; /* 品牌蓝色 */
+  color: var(--color-brand-500); /* 品牌蓝色 */
   text-align: center; /* 文字居中 */
 }
 
@@ -588,7 +587,7 @@ function handleKeyPress(event: KeyboardEvent): void {
 .wf-login__subtitle {
   margin: 0 0 32px; /* 下边距 32px（与表单间距） */
   font-size: 14px;
-  color: #666666; /* 灰色次要文字 */
+  color: var(--wf-text-secondary); /* 灰色次要文字 */
   text-align: center;
 }
 
@@ -621,7 +620,7 @@ function handleKeyPress(event: KeyboardEvent): void {
 .wf-login__label {
   font-size: 14px;
   font-weight: 500;
-  color: #333333; /* 深灰色主文字 */
+  color: var(--wf-text-primary); /* 深灰色主文字 */
 }
 
 /**
@@ -641,9 +640,9 @@ function handleKeyPress(event: KeyboardEvent): void {
   height: 44px;
   padding: 0 12px;
   font-size: 14px;
-  color: #333333;
-  background-color: #ffffff;
-  border: 1px solid #d9d9d9;
+  color: var(--wf-text-primary);
+  background-color: var(--wf-bg-surface);
+  border: 1px solid var(--wf-border-default);
   border-radius: 4px; /* 小圆角 */
   outline: none; /* 移除浏览器默认聚焦轮廓 */
   transition: all 0.3s ease; /* 过渡动画（聚焦时平滑变化） */
@@ -651,28 +650,28 @@ function handleKeyPress(event: KeyboardEvent): void {
 
 /** 输入框聚焦态样式（获得焦点时） */
 .wf-login__input:focus {
-  border-color: #1890ff; /* 蓝色边框 */
-  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1); /* 外发光效果 */
+  border-color: var(--color-brand-500); /* 蓝色边框 */
+  box-shadow: var(--wf-shadow-md); /* 外发光效果 */
 }
 
 /** 输入框占位符样式 */
 .wf-login__input::placeholder {
-  color: #bfbfbf; /* 浅灰色占位文字 */
+  color: var(--wf-text-muted); /* 浅灰色占位文字 */
 }
 
 /** 输入框错误状态（验证失败时） */
 .wf-login__input--error {
-  border-color: #ff4d4f; /* 红色边框 */
+  border-color: var(--wf-color-danger); /* 红色边框 */
 }
 
 .wf-login__input--error:focus {
-  box-shadow: 0 0 0 2px rgba(255, 77, 79, 0.1); /* 红色外发光 */
+  box-shadow: var(--wf-shadow-md); /* 红色外发光 */
 }
 
 /** 字段级错误提示（输入框下方的小字） */
 .wf-login__error-hint {
   font-size: 12px;
-  color: #ff4d4f; /* 红色错误文字 */
+  color: var(--wf-color-danger); /* 红色错误文字 */
 }
 
 /* ==================== 错误提示区域样式 ==================== */
@@ -707,8 +706,8 @@ function handleKeyPress(event: KeyboardEvent): void {
 /** 错误提示可见状态 */
 .wf-login__error-message--visible {
   color: #fff; /* 白色文字 */
-  background-color: #ff4d4f; /* 红色背景 */
-  border-left-color: #cf1322; /* 深红色竖条 */
+  background-color: var(--wf-color-danger); /* 红色背景 */
+  border-left-color: var(--wf-color-danger); /* 深红色竖条 */
 }
 
 /* ==================== 登录按钮样式 ==================== */
@@ -733,7 +732,7 @@ function handleKeyPress(event: KeyboardEvent): void {
   font-weight: 500;
   color: #ffffff;
   cursor: pointer; /* 鼠标悬停显示手型 */
-  background-color: #1890ff; /* 品牌蓝色背景 */
+  background-color: var(--color-brand-500); /* 品牌蓝色背景 */
   border: none; /* 无边框 */
   border-radius: 4px;
   transition: all 0.3s ease; /* 过渡动画 */
@@ -741,19 +740,19 @@ function handleKeyPress(event: KeyboardEvent): void {
 
 /** 按钮 hover 态（鼠标悬停） */
 .wf-login__button:hover:not(:disabled) {
-  background-color: #40a9ff; /* 浅蓝色（hover 变亮） */
+  background-color: var(--color-brand-500); /* hover 变亮（由变量控制） */
 }
 
 /** 按钮 active 态（鼠标按下） */
 .wf-login__button:active:not(:disabled) {
-  background-color: #096dd9; /* 深蓝色（按下变暗） */
+  background-color: var(--color-brand-500); /* 按下变暗（由变量控制） */
 }
 
 /** 按钮 disabled 态（禁用状态） */
 .wf-login__button:disabled {
   cursor: not-allowed; /* 禁止光标（斜杠圆圈） */
   opacity: 0.65; /* 半透明效果 */
-  background-color: #1890ff; /* 保持原色但透明 */
+  background-color: var(--color-brand-500); /* 保持原色但透明 */
 }
 
 /** 按钮 loading 态（正在提交） */
@@ -794,7 +793,7 @@ function handleKeyPress(event: KeyboardEvent): void {
 /** 辅助链接样式（预留） */
 .wf-login__link {
   font-size: 13px;
-  color: #1890ff;
+  color: var(--color-brand-500);
   text-decoration: none; /* 去掉下划线 */
 }
 

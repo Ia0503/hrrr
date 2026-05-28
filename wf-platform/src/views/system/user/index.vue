@@ -473,24 +473,25 @@ async function handleDelete(user: UserInfo): Promise<void> {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  transition: var(--wf-transition-theme);
 }
 
 .wf-user-manage__header {
   padding-bottom: 12px;
-  border-bottom: 1px solid #ebeef5;
+  border-bottom: 1px solid var(--wf-border-light);
 }
 
 .wf-user-manage__title {
   margin: 0 0 4px;
   font-size: 18px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--wf-text-primary);
 }
 
 .wf-user-manage__desc {
   margin: 0;
   font-size: 13px;
-  color: #9ca3af;
+  color: var(--wf-text-secondary);
 }
 
 .wf-user-manage__toolbar {
@@ -501,7 +502,7 @@ async function handleDelete(user: UserInfo): Promise<void> {
 
 .form-tip {
   font-size: 12px;
-  color: #909399;
+  color: var(--wf-text-muted);
   line-height: 1.4;
   margin-top: 4px;
 }

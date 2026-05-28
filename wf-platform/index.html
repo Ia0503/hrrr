@@ -5,6 +5,39 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>wf-platform</title>
+
+    <!--
+      防闪烁脚本（FOUC - Flash of Unstyled Content）
+      在 DOM 解析、CSS 加载之前执行，读取用户保存的主题偏好并立即应用
+
+      执行时机：
+        1. 浏览器解析到 <script> 时同步执行（阻塞渲染）
+        2. 此时 Vue/JS 还未加载，但 HTML 类名已设置好
+        3. 后续 CSS 解析时直接使用正确的主题变量，不会出现白色闪烁
+
+      优先级：
+        localStorage('wf-theme') > 系统偏好(prefers-color-scheme) > 默认亮色
+    -->
+    <script>
+      (function () {
+        try {
+          var savedTheme = localStorage.getItem("wf-theme");
+          if (savedTheme === "dark") {
+            document.documentElement.classList.add("dark");
+          } else if (savedTheme === "light") {
+            /* 明确选择亮色时移除 dark 类（防止系统暗色干扰）*/
+            document.documentElement.classList.remove("dark");
+          } else {
+            /* 无本地记录时跟随系统偏好 */
+            if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+              document.documentElement.classList.add("dark");
+            }
+          }
+        } catch (e) {
+          /* localStorage 不可用时（如隐私模式）静默失败 */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>

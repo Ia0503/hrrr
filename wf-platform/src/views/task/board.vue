@@ -255,6 +255,46 @@ function getStatusLabel(status: string): string {
   return statusMap[status] || status || "未设置";
 }
 
+/**
+ * 将任务类型值转为中文显示文本
+ *
+ * @param taskType - 任务类型枚举值
+ * @returns 中文显示名称
+ */
+function getTaskTypeLabel(taskType: string | undefined): string {
+  const typeMap: Record<string, string> = {
+    feature: "功能需求",
+    bug: "缺陷 Bug",
+    improvement: "优化改进",
+    tech_debt: "技术债务",
+    doc: "文档编写",
+  };
+  return taskType ? (typeMap[taskType] || taskType) : "未设置";
+}
+
+/**
+ * 根据复杂度数值返回对应的星级文字描述
+ *
+ * @param complexity - 复杂度评分（1-5）
+ * @returns 星级 + 文字描述字符串
+ */
+function getComplexityLabel(complexity: number | undefined): string {
+  if (!complexity) return "未评估";
+  const labels = ["", "极简 ⭐", "简单 ⭐⭐", "中等 ⭐⭐⭐", "复杂 ⭐⭐⭐⭐", "极复杂 ⭐⭐⭐⭐⭐"];
+  return labels[complexity] || `${complexity} 分`;
+}
+
+/**
+ * 格式化预估工时显示
+ *
+ * @param hours - 工时数（小时）
+ * @returns 格式化后的工时文本
+ */
+function formatEstimatedHours(hours: number | undefined): string {
+  if (!hours) return "未估算";
+  return `${hours} 小时`;
+}
+
 /* ============================================================
  * 新建任务弹窗
  * ============================================================ */
@@ -551,6 +591,14 @@ const handleEditFormSubmit = async (data: Record<string, unknown>) => {
 
         <!-- 元信息网格 -->
         <div class="wf-detail-dialog__meta-grid">
+          <!-- 任务类型 -->
+          <div class="wf-detail-dialog__meta-item">
+            <span class="wf-detail-dialog__meta-label">任务类型</span>
+            <span class="wf-detail-dialog__meta-value">
+              {{ getTaskTypeLabel(selectedTask.taskType) }}
+            </span>
+          </div>
+
           <!-- 负责人 -->
           <div class="wf-detail-dialog__meta-item">
             <span class="wf-detail-dialog__meta-label">负责人</span>
@@ -580,6 +628,22 @@ const handleEditFormSubmit = async (data: Record<string, unknown>) => {
             <span class="wf-detail-dialog__meta-label">截止日期</span>
             <span class="wf-detail-dialog__meta-value">
               {{ formatDate(selectedTask.dueDate) }}
+            </span>
+          </div>
+
+          <!-- 预估工时 -->
+          <div class="wf-detail-dialog__meta-item">
+            <span class="wf-detail-dialog__meta-label">预估工时</span>
+            <span class="wf-detail-dialog__meta-value">
+              {{ formatEstimatedHours(selectedTask.estimatedHours) }}
+            </span>
+          </div>
+
+          <!-- 复杂度评分 -->
+          <div class="wf-detail-dialog__meta-item">
+            <span class="wf-detail-dialog__meta-label">复杂度</span>
+            <span class="wf-detail-dialog__meta-value">
+              {{ getComplexityLabel(selectedTask.complexity) }}
             </span>
           </div>
 
@@ -636,8 +700,9 @@ const handleEditFormSubmit = async (data: Record<string, unknown>) => {
   min-height: 0; /* 关键：允许 flex 子项收缩到小于内容高度 */
   padding: 20px 24px;
   gap: 16px;
-  background-color: #f0f2f5;
+  background-color: var(--wf-bg-page);
   overflow: hidden;
+  transition: var(--wf-transition-theme);
 
   /* 禁止看板区域文字选中，防止拖拽时触发浏览器选区 */
   -webkit-user-select: none;
@@ -665,13 +730,13 @@ const handleEditFormSubmit = async (data: Record<string, unknown>) => {
   margin: 0;
   font-size: 20px;
   font-weight: 700;
-  color: #1f2937;
+  color: var(--wf-text-primary);
   line-height: 1.3;
 }
 
 .wf-board__subtitle {
   font-size: 13px;
-  color: #9ca3af;
+  color: var(--wf-text-muted);
   font-weight: 400;
 }
 
@@ -710,11 +775,11 @@ const handleEditFormSubmit = async (data: Record<string, unknown>) => {
 }
 
 .wf-board__ws-indicator--offline {
-  color: #9ca3af;
-  background-color: #f3f4f6;
+  color: var(--wf-text-muted);
+  background-color: var(--wf-bg-page);
 }
 .wf-board__ws-indicator--offline::before {
-  background-color: #d1d5db;
+  background-color: var(--wf-border-default);
 }
 
 /* ============================================================
@@ -727,7 +792,7 @@ const handleEditFormSubmit = async (data: Record<string, unknown>) => {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  color: #9ca3af;
+  color: var(--wf-text-muted);
 }
 
 .wf-board__loading-text {
@@ -854,13 +919,13 @@ const handleEditFormSubmit = async (data: Record<string, unknown>) => {
 .wf-board-column {
   display: flex;
   flex-direction: column;
-  background-color: #ffffff;
+  background-color: var(--wf-bg-surface);
   border-radius: 10px;
   min-width: 300px;
   max-width: 380px;
   max-height: 100%; /* 不超过父容器高度，确保内部滚动区 max-height 生效 */
   overflow: hidden; /* 裁剪超出部分，防止任务列表撑开列 */
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--wf-shadow-sm);
 
   /* 继承父级禁止选中，确保列内也不会触发文字选区 */
   -webkit-user-select: none;
@@ -873,8 +938,8 @@ const handleEditFormSubmit = async (data: Record<string, unknown>) => {
   align-items: center;
   justify-content: space-between;
   padding: 14px 16px;
-  border-bottom: 1px solid #f0f0f0;
-  background-color: #fafbfc;
+  border-bottom: 1px solid var(--wf-border-light);
+  background-color: var(--wf-bg-surface);
   flex-shrink: 0;
 }
 
@@ -882,7 +947,7 @@ const handleEditFormSubmit = async (data: Record<string, unknown>) => {
   margin: 0;
   font-size: 14px;
   font-weight: 600;
-  color: #374151;
+  color: var(--wf-text-primary);
 }
 
 .wf-board-column__count {
@@ -894,8 +959,8 @@ const handleEditFormSubmit = async (data: Record<string, unknown>) => {
   padding: 0 7px;
   font-size: 12px;
   font-weight: 600;
-  color: #6b7280;
-  background-color: #e5e7eb;
+  color: var(--wf-text-secondary);
+  background-color: var(--wf-border-default);
   border-radius: 11px;
   line-height: 22px;
 }
@@ -922,11 +987,11 @@ const handleEditFormSubmit = async (data: Record<string, unknown>) => {
   width: 4px;
 }
 .wf-board-column__list::-webkit-scrollbar-thumb {
-  background-color: #e5e7eb;
+  background-color: var(--wf-border-default);
   border-radius: 2px;
 }
 .wf-board-column__list::-webkit-scrollbar-thumb:hover {
-  background-color: #d1d5db;
+  background-color: var(--wf-border-default);
 }
 
 /* 空状态 */
@@ -943,13 +1008,13 @@ const handleEditFormSubmit = async (data: Record<string, unknown>) => {
 .wf-board-column__empty-text {
   margin: 0 0 4px;
   font-size: 13px;
-  color: #9ca3af;
+  color: var(--wf-text-muted);
 }
 
 .wf-board-column__empty-hint {
   margin: 0;
   font-size: 11px;
-  color: #d1d5db;
+  color: var(--wf-text-muted);
 }
 
 /* ============================================================
@@ -958,8 +1023,8 @@ const handleEditFormSubmit = async (data: Record<string, unknown>) => {
 .wf-task-card {
   position: relative;
   padding: 12px 14px;
-  background-color: #ffffff;
-  border: 1px solid #eaeaea;
+  background-color: var(--wf-bg-surface);
+  border: 1px solid var(--wf-border-light);
   border-radius: 8px;
   cursor: grab;
   transition: box-shadow 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
@@ -970,8 +1035,8 @@ const handleEditFormSubmit = async (data: Record<string, unknown>) => {
 }
 
 .wf-task-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  border-color: #d1d5db;
+  box-shadow: var(--wf-shadow-md);
+  border-color: var(--wf-border-default);
   transform: translateY(-1px);
 }
 
@@ -982,13 +1047,13 @@ const handleEditFormSubmit = async (data: Record<string, unknown>) => {
 /* 拖拽中的幽灵样式 */
 .wf-task-card--ghost {
   opacity: 0.4;
-  background-color: #f3f4f6;
+  background-color: var(--wf-bg-page);
   border-style: dashed;
 }
 
 /* 正在拖拽的样式 */
 .wf-task-card--drag {
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--wf-shadow-lg);
   transform: rotate(2deg);
 }
 
@@ -1008,7 +1073,7 @@ const handleEditFormSubmit = async (data: Record<string, unknown>) => {
 
 .wf-task-card__grip {
   font-size: 14px;
-  color: #9ca3af;
+  color: var(--wf-text-muted);
   letter-spacing: -1px;
   line-height: 1;
 }
@@ -1025,7 +1090,7 @@ const handleEditFormSubmit = async (data: Record<string, unknown>) => {
   margin: 0;
   font-size: 14px;
   font-weight: 500;
-  color: #1f2937;
+  color: var(--wf-text-primary);
   line-height: 1.4;
   flex: 1;
   word-break: break-word;
@@ -1039,7 +1104,7 @@ const handleEditFormSubmit = async (data: Record<string, unknown>) => {
 .wf-task-card__desc {
   margin: 0 0 8px;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--wf-text-secondary);
   line-height: 1.5;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -1054,9 +1119,9 @@ const handleEditFormSubmit = async (data: Record<string, unknown>) => {
   flex-wrap: wrap;
   gap: 8px;
   padding-top: 8px;
-  border-top: 1px solid #f3f4f6;
+  border-top: 1px solid var(--wf-border-light);
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--wf-text-muted);
 }
 
 .wf-task-card__assignee,
@@ -1082,14 +1147,14 @@ const handleEditFormSubmit = async (data: Record<string, unknown>) => {
 .wf-detail-dialog :deep(.el-dialog__header) {
   padding: 16px 24px;
   margin: 0;
-  border-bottom: 1px solid #ebeef5;
-  background-color: #fafbfc;
+  border-bottom: 1px solid var(--wf-border-light);
+  background-color: var(--wf-bg-surface);
 }
 
 .wf-detail-dialog :deep(.el-dialog__title) {
   font-size: 16px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--wf-text-primary);
 }
 
 .wf-detail-dialog :deep(.el-dialog__body) {
@@ -1098,8 +1163,8 @@ const handleEditFormSubmit = async (data: Record<string, unknown>) => {
 
 .wf-detail-dialog :deep(.el-dialog__footer) {
   padding: 12px 24px;
-  border-top: 1px solid #ebeef5;
-  background-color: #fafbfc;
+  border-top: 1px solid var(--wf-border-light);
+  background-color: var(--wf-bg-surface);
 }
 
 /* 详情内容区 */
@@ -1116,14 +1181,14 @@ const handleEditFormSubmit = async (data: Record<string, unknown>) => {
   gap: 10px;
   margin-bottom: 20px;
   padding-bottom: 14px;
-  border-bottom: 2px solid #e5e7eb;
+  border-bottom: 2px solid var(--wf-border-default);
 }
 
 .wf-detail-dialog__title {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--wf-text-primary);
   line-height: 1.4;
   word-break: break-word;
 }
@@ -1137,7 +1202,7 @@ const handleEditFormSubmit = async (data: Record<string, unknown>) => {
   margin: 0 0 8px;
   font-size: 13px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--wf-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -1145,7 +1210,7 @@ const handleEditFormSubmit = async (data: Record<string, unknown>) => {
 .wf-detail-dialog__desc {
   margin: 0;
   font-size: 14px;
-  color: #374151;
+  color: var(--wf-text-primary);
   line-height: 1.7;
   white-space: pre-wrap;
   word-break: break-word;
@@ -1157,9 +1222,9 @@ const handleEditFormSubmit = async (data: Record<string, unknown>) => {
   grid-template-columns: repeat(2, 1fr);
   gap: 12px 24px;
   padding: 14px 16px;
-  background-color: #f9fafb;
+  background-color: var(--wf-bg-page);
   border-radius: 8px;
-  border: 1px solid #f0f0f0;
+  border: 1px solid var(--wf-border-light);
   margin-bottom: 18px;
 }
 
@@ -1172,7 +1237,7 @@ const handleEditFormSubmit = async (data: Record<string, unknown>) => {
 .wf-detail-dialog__meta-label {
   font-size: 11px;
   font-weight: 500;
-  color: #9ca3af;
+  color: var(--wf-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.3px;
 }
@@ -1180,7 +1245,7 @@ const handleEditFormSubmit = async (data: Record<string, unknown>) => {
 .wf-detail-dialog__meta-value {
   font-size: 14px;
   font-weight: 500;
-  color: #1f2937;
+  color: var(--wf-text-primary);
 }
 
 /* 标签列表 */

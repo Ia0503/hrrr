@@ -252,8 +252,32 @@ watch(
       fetchUserList();
 
       if (props.taskData) {
-        Object.assign(formModel.value, props.taskData);
-        console.log("[task-form] 编辑模式，已填充任务数据:", props.taskData.title);
+        /**
+         * 编辑模式：按 schema 字段名精准映射任务数据到表单
+         *
+         * 【设计要点】
+         * - 只提取 schema 中定义的字段，避免 id/createdAt/orderIndex 等非表单字段污染 formModel
+         * - 使用逐字段赋值而非 Object.assign，确保类型安全和可追溯性
+         * - 对于 undefined 值保留为 undefined，让表单组件使用各自的默认值展示
+         */
+        const taskData = props.taskData;
+        const schemaFields = taskFormSchema.map((f) => f.field);
+
+        console.log("[task-form] 编辑模式，开始填充任务数据:", taskData.title);
+        console.log("[task-form] Schema 字段列表:", schemaFields.join(", "));
+
+        /* 遍历 schema 定义的每个字段，从任务数据中提取对应值 */
+        for (const field of schemaFields) {
+          if (field in taskData) {
+            const value = (taskData as any)[field];
+            formModel.value[field] = value ?? undefined;
+            console.log(`[task-form]   ✓ 字段 [${field}] =`, JSON.stringify(value));
+          } else {
+            console.log(`[task-form]   ⚠ 字段 [${field}] 在任务数据中不存在，保留默认值`);
+          }
+        }
+
+        console.log("[task-form] ✅ 编辑模式数据填充完成");
       } else {
         resetFields();
         console.log("[task-form] 新建模式，表单已重置");
@@ -292,6 +316,19 @@ const handleSubmit = async () => {
     }
 
     console.log("[task-form] ✅ 表单提交数据:", JSON.stringify(formData, null, 2));
+
+    /**
+     * 编辑模式：将任务 ID 注入提交数据
+     *
+     * 【设计要点】
+     * - 新建模式：id 由后端生成，不需要传
+     * - 编辑模式：必须携带 id 字段，否则后端不知道更新哪条记录
+     * - 使用展开运算符合并，避免直接修改 formData 原对象
+     */
+    if (props.taskData?.id) {
+      formData.id = props.taskData.id;
+      console.log("[task-form] 编辑模式，已注入任务 ID:", formData.id);
+    }
 
     emit("submit", formData);
     emit("update:modelValue", false);

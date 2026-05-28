@@ -14,6 +14,10 @@ import { createApp } from "vue";
 import { createPinia } from "pinia";
 import ElementPlus from "element-plus";
 import "element-plus/dist/index.css";
+/* Element Plus 暗黑模式 CSS 变量
+ * 引入后，当 <html> 标签拥有 'dark' 类名时，
+ * Element Plus 所有组件自动切换为暗色配色 */
+import "element-plus/theme-chalk/dark/css-vars.css";
 import * as ElementPlusIconsVue from "@element-plus/icons-vue";
 import App from "./App.vue";
 import router from "./router";

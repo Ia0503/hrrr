@@ -33,11 +33,13 @@ import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessageBox, ElMessage } from "element-plus";
 import { useUserStore } from "@/stores/user";
+import { useAppStore } from "@/stores/app";
 
 /* ==================== 实例初始化 ==================== */
 
 const router = useRouter();
 const userStore = useUserStore();
+const appStore = useAppStore(); /* 应用级状态（主题等）*/
 
 /* ==================== 响应式状态 ==================== */
 
@@ -128,8 +130,51 @@ async function handleLogout(): Promise<void> {
         </button>
       </div>
 
-      <!-- 右侧：用户信息 + 退出按钮 -->
+      <!-- 右侧：主题切换 + 用户信息 + 退出按钮 -->
       <div class="wf-default-layout__header-right">
+        <!-- 主题切换开关 -->
+        <button
+          class="wf-default-layout__theme-toggle"
+          type="button"
+          :title="appStore.theme === 'light' ? '切换到暗色模式' : '切换到亮色模式'"
+          @click="appStore.toggleTheme()"
+        >
+          <!-- 亮色模式显示月亮图标（提示可切暗色）-->
+          <svg
+            v-if="appStore.theme === 'light'"
+            class="wf-default-layout__theme-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+          </svg>
+          <!-- 暗色模式显示太阳图标（提示可切亮色）-->
+          <svg
+            v-else
+            class="wf-default-layout__theme-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <circle cx="12" cy="12" r="5" />
+            <line x1="12" y1="1" x2="12" y2="3" />
+            <line x1="12" y1="21" x2="12" y2="23" />
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+            <line x1="1" y1="12" x2="3" y2="12" />
+            <line x1="21" y1="12" x2="23" y2="12" />
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+          </svg>
+        </button>
+
         <span class="wf-default-layout__username">{{ username }}</span>
         <button
           class="wf-default-layout__logout-btn"
@@ -241,11 +286,12 @@ async function handleLogout(): Promise<void> {
   align-items: center;
   justify-content: space-between;
   padding: 0 20px;
-  background-color: #fff;
-  border-bottom: 1px solid #e8e8e8;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  background-color: var(--wf-header-bg); /* 使用主题变量 */
+  border-bottom: 1px solid var(--wf-header-border); /* 使用主题变量 */
+  box-shadow: var(--wf-shadow-sm); /* 使用主题变量 */
   z-index: 100;
   position: relative;
+  transition: var(--wf-transition-theme); /* 主题切换时平滑过渡 */
 }
 
 .wf-default-layout__header-left {
@@ -281,7 +327,7 @@ async function handleLogout(): Promise<void> {
   display: block;
   width: 100%;
   height: 2.5px;
-  background-color: #333;
+  background-color: var(--wf-text-primary); /* 使用主题变量 */
   border-radius: 2px;
   transition: all 0.3s ease;
   transform-origin: center;
@@ -299,6 +345,38 @@ async function handleLogout(): Promise<void> {
   transform: translateY(-9.5px) rotate(-45deg);
 }
 
+/** 主题切换按钮 */
+.wf-default-layout__theme-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--wf-border-light); /* 使用主题变量 */
+  border-radius: var(--radius-sm, 6px);
+  background-color: transparent;
+  color: var(--wf-text-secondary); /* 使用主题变量 */
+  cursor: pointer;
+  transition: all 0.25s ease; /* 跟随主题过渡时间 */
+}
+
+.wf-default-layout__theme-toggle:hover {
+  color: var(--color-brand-500);
+  border-color: var(--color-brand-300);
+  background-color: var(--wf-bg-surface-alt);
+}
+
+.wf-default-layout__theme-toggle:active {
+  transform: scale(0.93);
+}
+
+/** 主题图标（太阳/月亮 SVG）*/
+.wf-default-layout__theme-icon {
+  width: 17px;
+  height: 17px;
+}
+
 .wf-default-layout__header-right {
   display: flex;
   align-items: center;
@@ -307,16 +385,16 @@ async function handleLogout(): Promise<void> {
 
 .wf-default-layout__username {
   font-size: 14px;
-  color: #333;
+  color: var(--wf-text-primary); /* 使用主题变量 */
 }
 
 /** 退出登录按钮 */
 .wf-default-layout__logout-btn {
   padding: 5px 14px;
   font-size: 13px;
-  color: #666;
+  color: var(--wf-text-secondary); /* 使用主题变量 */
   background-color: transparent;
-  border: 1px solid #dcdfe6;
+  border: 1px solid var(--wf-border-light); /* 使用主题变量 */
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -324,9 +402,9 @@ async function handleLogout(): Promise<void> {
 }
 
 .wf-default-layout__logout-btn:hover {
-  color: #f56c6c;
-  border-color: #f56c6c;
-  background-color: #fef0f0;
+  color: var(--wf-color-danger);
+  border-color: var(--wf-color-danger);
+  background-color: var(--wf-bg-surface-alt);
 }
 
 .wf-default-layout__logout-btn:active {
@@ -342,14 +420,14 @@ async function handleLogout(): Promise<void> {
 /* ==================== 侧边栏样式 ==================== */
 
 .wf-default-layout__aside {
-  background-color: #001529;
+  background-color: var(--wf-sidebar-bg); /* 使用主题变量 */
   overflow-x: hidden;
   overflow-y: auto;
   /* 大屏固定宽度，不折叠 */
   width: 180px !important;
   min-width: 180px !important;
   max-width: 180px !important;
-  transition: transform 0.3s ease, opacity 0.3s ease;
+  transition: transform 0.3s ease, opacity 0.3s ease, background-color 0.25s ease;
 }
 
 .wf-default-layout__aside::-webkit-scrollbar {
@@ -376,9 +454,10 @@ async function handleLogout(): Promise<void> {
 /* ==================== 主内容区域样式 ==================== */
 
 .wf-default-layout__main {
-  background-color: #f5f7fa;
+  background-color: var(--wf-bg-body); /* 使用主题变量 */
   overflow-y: auto;
   padding: 16px;
+  transition: var(--wf-transition-theme); /* 主题切换时平滑过渡 */
 }
 
 /* ============================================================
