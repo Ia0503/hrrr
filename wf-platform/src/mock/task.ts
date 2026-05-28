@@ -51,7 +51,7 @@ interface StoredTask {
 
 /** 初始化预设任务数据 */
 function initPresetTasks(): StoredTask[] {
-  const assigneePool = ["张三", "李四", "王五", "赵六", "钱七"];
+  const assigneePool = ["管理员", "张三", "李四", "王五"];
   const tagPool = ["前端开发", "后端开发", "UI设计", "数据库", "API接口", "测试验证", "文档编写"];
 
   const pickTags = (pool: string[]): string[] => {

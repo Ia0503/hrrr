@@ -91,6 +91,20 @@ const loginForm = reactive({
 });
 
 /**
+ * 表单字段交互状态
+ * 用于跟踪用户是否已经与某个字段进行过交互（输入或失去焦点）
+ *
+ * 设计说明：
+ *   - 初始值均为 false（未交互）
+ *   - 用户输入或离开输入框时设为 true（已交互）
+ *   - 只有在已交互的状态下才显示错误提示（避免未操作就报错）
+ */
+const fieldTouched = reactive({
+  username: false, // 用户名是否已被交互
+  password: false, // 密码是否已被交互
+});
+
+/**
  * 表单验证规则标识
  * 用于标记哪些字段已通过验证
  *
@@ -113,9 +127,15 @@ const isLoading = ref<boolean>(false);
 
 /**
  * 错误提示信息
- * 非空时在表单下方显示红色错误文本
+ * 分为两类：
+ *   - fieldErrors: 字段级验证错误（每个字段独立，互不影响）
+ *   - submitError: 提交/API 返回的全局错误（如账号密码错误）
  */
-const errorMessage = ref<string>("");
+const fieldErrors = reactive({
+  username: "", // 用户名字段的具体错误信息
+  password: "", // 密码字段的具体错误信息
+});
+const submitError = ref<string>(""); // API 返回的全局错误（账号密码错误等）
 
 // ==================== 表单验证方法 ====================
 
@@ -126,15 +146,19 @@ const errorMessage = ref<string>("");
  * @returns boolean - 验证是否通过（true=通过，false=不通过）
  *
  * 触发时机：
- *   - 输入框失去焦点时（@blur 事件）
+ *   - 输入框输入时（@input 事件）→ 实时验证
+ *   - 输入框失去焦点时（@blur 事件）→ 确认验证
  *   - 表单提交前统一校验
  */
 function validateUsername(): boolean {
+  /* 标记该字段已被用户交互 */
+  fieldTouched.username = true;
+
   const username = loginForm.username.trim(); // 去除首尾空格
 
   // 规则1：非空检查
   if (!username) {
-    errorMessage.value = "请输入用户名";
+    fieldErrors.username = "请输入用户名";
     formValidated.username = false;
     console.warn("[login] 用户名验证失败：不能为空");
     return false;
@@ -142,14 +166,16 @@ function validateUsername(): boolean {
 
   // 规则2：最小长度检查
   if (username.length < 2) {
-    errorMessage.value = "用户名至少需要 2 个字符";
+    fieldErrors.username = "用户名至少需要 2 个字符";
     formValidated.username = false;
     console.warn("[login] 用户名验证失败：长度不足");
     return false;
   }
 
-  // 验证通过
+  // 验证通过（清空该字段的错误提示）
+  fieldErrors.username = "";
   formValidated.username = true;
+  console.log(`[login] ✅ 用户名验证通过: ${username}`);
   return true;
 }
 
@@ -164,11 +190,14 @@ function validateUsername(): boolean {
  *   - 仅记录密码长度或掩码（如 "****"）用于调试
  */
 function validatePassword(): boolean {
+  /* 标记该字段已被用户交互 */
+  fieldTouched.password = true;
+
   const password = loginForm.password;
 
   // 规则1：非空检查
   if (!password) {
-    errorMessage.value = "请输入密码";
+    fieldErrors.password = "请输入密码";
     formValidated.password = false;
     console.warn("[login] 密码验证失败：不能为空");
     return false;
@@ -176,7 +205,7 @@ function validatePassword(): boolean {
 
   // 规则2：最小长度检查
   if (password.length < 6) {
-    errorMessage.value = "密码至少需要 6 个字符";
+    fieldErrors.password = "密码至少需要 6 个字符";
     formValidated.password = false;
     console.warn(
       `[login] 密码验证失败：长度不足（当前 ${password.length} 位）`,
@@ -185,8 +214,46 @@ function validatePassword(): boolean {
   }
 
   // 验证通过（⚠️ 不要输出密码内容到日志）
+  fieldErrors.password = "";
   formValidated.password = true;
+  console.log("[login] ✅ 密码验证通过");
   return true;
+}
+
+/**
+ * 用户名输入事件处理
+ * 在用户每次按键/输入时触发实时验证
+ *
+ * 设计说明：
+ *   - 实时反馈：用户边输入边看到验证结果
+ *   - 性能优化：Vue 的响应式系统已做节流，无需手动防抖
+ *   - 体验提升：避免用户填完所有内容才发现错误
+ *
+ * 使用场景：
+ *   - 用户输入 "a" → 显示"至少需要 2 个字符"
+ *   - 用户继续输入 "ad" → 错误提示消失（验证通过）
+ *   - 用户输入 "admin" → 保持通过状态
+ */
+function handleUsernameInput(): void {
+  /* 只有在用户已经交互过的情况下才进行实时验证 */
+  if (fieldTouched.username || loginForm.username.length > 0) {
+    validateUsername();
+  }
+}
+
+/**
+ * 密码输入事件处理
+ * 在用户每次按键/输入时触发实时验证
+ *
+ * 与 handleUsernameInput 设计保持一致：
+ *   - 输入过程中实时更新验证状态
+ *   - 达到要求后立即清除错误提示
+ */
+function handlePasswordInput(): void {
+  /* 只有在用户已经交互过的情况下才进行实时验证 */
+  if (fieldTouched.password || loginForm.password.length > 0) {
+    validatePassword();
+  }
 }
 
 // ==================== 表单提交方法 ====================
@@ -214,8 +281,8 @@ async function handleLogin(): Promise<void> {
   try {
     console.log("[login] 开始处理登录请求...");
 
-    // 步骤1：清空之前的错误提示
-    errorMessage.value = "";
+    // 步骤1：清空之前的错误提示（只清全局提交错误，保留字段级错误）
+    submitError.value = "";
 
     // 步骤2：表单字段验证（全部通过后才提交）
     const isUsernameValid = validateUsername();
@@ -241,16 +308,14 @@ async function handleLogin(): Promise<void> {
 
     // 步骤5：确定跳转目标地址
     /**
-     * 跳转优先级：
-     *   1. URL 查询参数中的 redirect（从路由守卫传递过来）
-     *   2. 默认跳转到仪表盘 "/dashboard"
+     * 所有用户登录后统一跳转到仪表盘 "/dashboard"
      *
-     * 使用场景示例：
-     *   - 用户访问 /dashboard 但未登录
-     *   - 被重定向到 /login?redirect=/dashboard
-     *   - 登录成功后自动回到 /dashboard
+     * 设计说明：
+     *   - 不再使用 URL 查询参数中的 redirect（避免跳转到之前的页面）
+     *   - 确保所有角色（admin/user）登录后都有统一的入口体验
+     *   - 用户可以从侧边栏自行导航到其他功能模块
      */
-    const redirectPath = (route.query.redirect as string) || "/dashboard";
+    const redirectPath = "/dashboard";
 
     console.log(`[login] 🔄 跳转到目标地址: ${redirectPath}`);
 
@@ -288,8 +353,8 @@ async function handleLogin(): Promise<void> {
         "服务器返回异常，请稍后重试";
     }
 
-    // 显示错误提示给用户
-    errorMessage.value = errorMsg;
+    // 显示错误提示给用户（仅设置全局提交错误，不影响字段级验证状态）
+    submitError.value = errorMsg;
   } finally {
     // 无论成功还是失败，都重置加载状态
     isLoading.value = false;
@@ -359,9 +424,13 @@ function handleKeyPress(event: KeyboardEvent): void {
             - 输入框内容变化 → 自动更新 loginForm.username
             - 代码修改 loginForm.username → 自动刷新输入框显示
 
+          @input 输入事件：
+            - 用户每次按键/粘贴时触发实时验证
+            - 即时反馈验证结果，提升用户体验
+
           @blur 失去焦点事件：
-            - 用户离开输入框时触发验证
-            - 即时反馈，提升用户体验
+            - 用户离开输入框时触发确认验证
+            - 作为实时验证的补充（确保最终状态正确）
         -->
         <div class="wf-login__form-group">
           <label for="username" class="wf-login__label">用户名</label>
@@ -370,17 +439,18 @@ function handleKeyPress(event: KeyboardEvent): void {
             v-model="loginForm.username"
             type="text"
             class="wf-login__input"
-            :class="{ 'wf-login__input--error': !formValidated.username && loginForm.username }"
+            :class="{ 'wf-login__input--error': fieldTouched.username && !formValidated.username }"
             placeholder="请输入用户名"
             autocomplete="username"
+            @input="handleUsernameInput"
             @blur="validateUsername"
           />
-          <!-- 验证失败的视觉提示（可选增强） -->
+          <!-- 验证失败的视觉提示（仅在用户交互过且未通过时显示） -->
           <span
-            v-if="!formValidated.username && loginForm.username"
+            v-if="fieldTouched.username && !formValidated.username"
             class="wf-login__error-hint"
           >
-            用户名格式不正确
+            {{ fieldErrors.username || "用户名格式不正确" }}
           </span>
         </div>
 
@@ -400,32 +470,33 @@ function handleKeyPress(event: KeyboardEvent): void {
             v-model="loginForm.password"
             type="password"
             class="wf-login__input"
-            :class="{ 'wf-login__input--error': !formValidated.password && loginForm.password }"
+            :class="{ 'wf-login__input--error': fieldTouched.password && !formValidated.password }"
             placeholder="请输入密码"
             autocomplete="current-password"
+            @input="handlePasswordInput"
             @blur="validatePassword"
           />
-          <!-- 验证失败的视觉提示 -->
+          <!-- 验证失败的视觉提示（仅在用户交互过且未通过时显示） -->
           <span
-            v-if="!formValidated.password && loginForm.password"
+            v-if="fieldTouched.password && !formValidated.password"
             class="wf-login__error-hint"
           >
-            密码至少需要 6 个字符
+            {{ fieldErrors.password || "密码至少需要 6 个字符" }}
           </span>
         </div>
 
-        <!-- ==================== 错误提示区域 ==================== -->
+        <!-- ==================== 全局错误提示区域 ==================== -->
         <!--
-          全局错误提示
-          仅当 errorMessage 不为空时显示（v-if 条件渲染）
+          全局/提交级错误提示
+          使用固定高度容器防止布局跳变
 
-          显示场景：
-            - 登录接口返回错误（账号密码错误等）
-            - 网络异常
-            - 服务器内部错误
+          设计说明：
+            - 字段级错误显示在输入框下方（小字红色）
+            - 提交级错误显示在表单底部（醒目红底白字）
+            - 两者互不干扰，各自独立管理
         -->
-        <div v-if="errorMessage" class="wf-login__error-message">
-          {{ errorMessage }}
+        <div class="wf-login__error-message" :class="{ 'wf-login__error-message--visible': submitError }">
+          {{ submitError || "\u00A0" }} <!-- 不换行空格占位，保持容器高度 -->
         </div>
 
         <!-- ==================== 登录按钮 ==================== -->
@@ -533,11 +604,17 @@ function handleKeyPress(event: KeyboardEvent): void {
 /**
  * 表单组容器
  * 包含 label + input + 错误提示
+ *
+ * 布局设计（防跳变）：
+ *   - 使用 min-height 预留错误提示的空间
+ *   - 错误提示出现/消失时不会导致高度变化
+ *   - 保证视觉稳定性
  */
 .wf-login__form-group {
   display: flex;
   flex-direction: column;
   gap: 8px; /* label 与 input 间距 */
+  min-height: 80px; /* 预留 label(20) + input(44) + error(16) 的最小高度，防止错误提示出现时跳动 */
 }
 
 /** 表单标签文字 */
@@ -601,8 +678,13 @@ function handleKeyPress(event: KeyboardEvent): void {
 /* ==================== 错误提示区域样式 ==================== */
 
 /**
- * 全局错误提示
+ * 全局/提交级错误提示
  * 表单底部显示的醒目错误信息
+ *
+ * 布局设计（防跳变）：
+ *   - 使用 min-height 预留空间（即使无错误也占位）
+ *   - 出现/消失时不会导致按钮位置跳动
+ *   - 视觉上更稳定
  *
  * 设计特点：
  *   - 红色背景 + 白色文字（高对比度）
@@ -610,13 +692,23 @@ function handleKeyPress(event: KeyboardEvent): void {
  *   - 左侧红色竖条（强调视觉效果）
  */
 .wf-login__error-message {
+  min-height: 38px; /* 预留一行文字的高度，防止出现/消失时跳动 */
   padding: 10px 12px;
   font-size: 13px;
-  color: #fff;
-  background-color: #ff4d4f;
+  color: transparent; /* 默认透明（占位状态） */
+  background-color: transparent; /* 默认透明背景 */
   border-radius: 4px;
-  border-left: 3px solid #cf1322; /* 左侧深红色竖条 */
+  border-left: 3px solid transparent; /* 默认透明边框 */
   line-height: 1.5;
+  box-sizing: border-box; /* 确保 padding 不影响总高度 */
+  transition: all 0.2s ease; /* 平滑过渡效果 */
+}
+
+/** 错误提示可见状态 */
+.wf-login__error-message--visible {
+  color: #fff; /* 白色文字 */
+  background-color: #ff4d4f; /* 红色背景 */
+  border-left-color: #cf1322; /* 深红色竖条 */
 }
 
 /* ==================== 登录按钮样式 ==================== */

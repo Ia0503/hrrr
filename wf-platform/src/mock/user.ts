@@ -1,147 +1,234 @@
 /**
  * 用户相关 Mock 接口
- * 模拟登录和 Token 刷新功能
+ * 模拟用户认证、用户管理（CRUD）功能
  *
- * @mock 本文件为 Mock 数据定义文件
- * 未来替换方式：
- *   1. 删除本文件或将其移至归档目录
- *   2. 在 vite.config.ts 中移除 viteMockServe 插件配置
- *   3. 确保 src/api/modules/user.ts 中的接口地址指向真实后端
- *   4. 取消 api 文件中被注释的真实 Axios 请求代码
+ * 数据模型：
+ *   - 用户数据存储在模块级单例 userStore[] 中（模拟数据库表）
+ *   - 所有接口共享同一数据源，修改即时生效
+ *   - 刷新页面后重置为初始状态（纯内存实现）
+ *
+ * 预设账户：
+ *   admin    管理员  密码 123456
+ *   zhangsan 普通用户  密码 123456
+ *   lisi     普通用户  密码 123456
+ *   wangwu   普通用户  密码 123456
  */
 
 import type { MockMethod } from "vite-plugin-mock";
 import Mock from "mockjs";
 
-// ==================== 工具常量 ====================
-
-/** Mock 使用的随机库前缀（MockJS 的 Random 对象） */
 const { Random } = Mock;
 
-/**
- * 模拟生成的 Token 前缀
- * 生产环境中由后端 JWT/OAuth 服务生成
- */
+// ==================== 类型定义 ====================
+
+/** 用户角色 */
+type UserRole = "admin" | "user";
+
+/** 用户状态 */
+type UserStatus = "active" | "disabled";
+
+/** 存储中的用户对象 */
+interface StoredUser {
+  id: number;
+  username: string;
+  nickname: string;
+  password: string;
+  role: UserRole;
+  status: UserStatus;
+  createdAt: string;
+}
+
+// ==================== 统一用户存储（模块级单例）====================
+
+/** Token 前缀 */
 const MOCK_TOKEN_PREFIX = "mock_token_";
 
-/**
- * 模拟 Token 有效期（毫秒）
- * 设为 10 秒便于测试 401 触发刷新流程
- * 实际项目中 Token 有效期通常为 15 分钟 ~ 2 小时
- *
- * ⚠️ 存疑：10 秒仅为测试值，正式对接后由后端控制有效期
- */
-const MOCK_TOKEN_EXPIRES_MS = 10 * 1000;
+/** 会话信息 */
+interface SessionInfo {
+  userId: number;
+  username: string;
+  token: string;
+  createdAt: number;
+}
+
+/** 内存会话存储：token → sessionInfo */
+const sessionStore = new Map<string, SessionInfo>();
+
+/** 自增 ID 计数器 */
+let userIdCounter = 100;
 
 /**
- * 内存中模拟的用户会话存储
- * Key: accessToken → Value: 会话信息
- * 仅用于 Mock 环境，不持久化
+ * 初始化预设用户
+ * 只有这些用户可以登录，其他登录请求一律拒绝
  */
-const mockSessionStore = new Map<
-  string,
-  {
-    userId: number;
-    username: string;
-    refreshToken: string;
-    createdAt: number;
-  }
->();
+function initUsers(): StoredUser[] {
+  return [
+    {
+      id: userIdCounter++,
+      username: "admin",
+      nickname: "管理员",
+      password: "123456",
+      role: "admin",
+      status: "active",
+      createdAt: "2024-01-01 00:00:00",
+    },
+    {
+      id: userIdCounter++,
+      username: "zhangsan",
+      nickname: "张三",
+      password: "123456",
+      role: "user",
+      status: "active",
+      createdAt: "2024-02-15 10:30:00",
+    },
+    {
+      id: userIdCounter++,
+      username: "lisi",
+      nickname: "李四",
+      password: "123456",
+      role: "user",
+      status: "active",
+      createdAt: "2024-03-10 14:20:00",
+    },
+    {
+      id: userIdCounter++,
+      username: "wangwu",
+      nickname: "王五",
+      password: "123456",
+      role: "user",
+      status: "active",
+      createdAt: "2024-04-20 09:15:00",
+    },
+  ];
+}
 
-// ==================== 工具函数 ====================
+/** 统一用户存储实例 */
+let userStore: StoredUser[] = initUsers();
 
-/**
- * 生成一个模拟的 Access Token
- *
- * @returns {string} 格式为 mock_token_ + 随机字符串 的 Token
- */
-function generateMockAccessToken(): string {
+// ==================== 校验工具函数 ====================
+
+/** 用户名校验：纯小写字母 [a-z]，长度 2~18 */
+function isValidUsername(username: string): boolean {
+  return /^[a-z]{2,18}$/.test(username);
+}
+
+/** 昵称校验：≥ 2个字符，支持中文/英文/符号 */
+function isValidNickname(nickname: string): boolean {
+  return typeof nickname === "string" && nickname.trim().length >= 2;
+}
+
+/** 密码校验：纯数字，长度 6~18 */
+function isValidPassword(password: string): boolean {
+  return /^\d{6,18}$/.test(password);
+}
+
+/** 根据用户名查找用户（用于登录）*/
+function findUserByUsername(username: string): StoredUser | undefined {
+  return userStore.find((u) => u.username === username);
+}
+
+/** 根据 ID 查找用户 */
+function findUserById(id: number | string): StoredUser | undefined {
+  return userStore.find((u) => u.id === Number(id));
+}
+
+/** 生成模拟 Token */
+function generateToken(): string {
   return `${MOCK_TOKEN_PREFIX}${Random.string(32)}`;
 }
 
-/**
- * 生成一个模拟的 Refresh Token
- *
- * @returns {string} 格式为 mock_refresh_ + 随机字符串 的 Token
- */
-function generateMockRefreshToken(): string {
-  return `mock_refresh_${Random.string(40)}`;
+/** 从 Authorization 头提取 Token 并查找对应会话 */
+function getSession(headers?: Record<string, string>): SessionInfo | null {
+  const authHeader = headers?.authorization ?? "";
+  const token = authHeader.replace("Bearer ", "");
+  if (!token || token.startsWith("expire_")) return null;
+  return sessionStore.get(token) ?? null;
 }
+
+/** 根据会话获取对应用户 */
+function getUserFromSession(session: SessionInfo): StoredUser | undefined {
+  return findUserById(session.userId);
+}
+
+// ==================== 菜单定义 ====================
+
+/** 管理员菜单（含系统管理）*/
+const ADMIN_MENUS = [
+  { name: "Dashboard", path: "/dashboard", component: "views/dashboard/index", redirect: null as string | null, meta: { title: "仪表盘", icon: "DashboardIcon", hidden: false }, children: [] },
+  { name: "TaskBoard", path: "/task/board", component: "views/task/board", redirect: null, meta: { title: "任务看板", icon: "GridIcon", hidden: false }, children: [] },
+  { name: "System", path: "/system", component: null, redirect: "/system/user", meta: { title: "系统管理", icon: "SettingIcon", hidden: false }, children: [
+    { name: "UserManage", path: "/system/user", component: "views/system/user/index", meta: { title: "用户管理", icon: "UserIcon" }, children: [] as never[] },
+  ]},
+];
+
+/** 普通用户菜单（无系统管理）*/
+const USER_MENUS = [
+  { name: "Dashboard", path: "/dashboard", component: "views/dashboard/index", redirect: null as string | null, meta: { title: "仪表盘", icon: "DashboardIcon", hidden: false }, children: [] },
+  { name: "TaskBoard", path: "/task/board", component: "views/task/board", redirect: null, meta: { title: "任务看板", icon: "GridIcon", hidden: false }, children: [] },
+];
 
 // ==================== Mock 接口定义 ====================
 
-/**
- * Mock 接口规则列表
- * 每个规则匹配特定的 URL 和 Method，返回预设的 Mock 数据
- *
- * MockMethod 结构说明：
- *   - url: 匹配的请求路径（支持正则）
- *   - method: HTTP 方法（GET / POST / PUT / DELETE 等）
- *   - response: 返回 Mock 数据的函数，接收参数为 (req.body, req.query, req.headers)
- *   - statusCode: 自定义 HTTP 状态码（可选，默认 200）
- */
 export default [
   // ==================== 登录接口 ====================
   {
-    /** @mock 模拟用户登录接口 */
     url: "/api/login",
     method: "post",
 
-    /**
-     * 登录 Mock 处理函数
-     * 接收用户名和密码，返回模拟的 Token 和用户信息
-     *
-     * @param body - 请求体，期望格式 { username: string; password: string }
-     * @returns Mock 响应数据
-     */
     response: ({ body }: { body?: Record<string, unknown> }) => {
-      const username = body?.username ?? "admin";
-      const password = body?.password ?? "";
+      const username = String(body?.username ?? "");
+      const password = String(body?.password ?? "");
 
-      console.log(
-        `[mock/login] 收到登录请求: username=${username}, password=${"*".repeat(String(password).length)}`,
-      );
+      console.log(`[mock/login] 登录请求: username=${username}`);
 
-      // 模拟密码校验（实际由后端完成）
+      /* 参数完整性检查 */
       if (!username || !password) {
-        console.warn("[mock/login] 登录失败：缺少用户名或密码");
-        return {
-          code: 40001,
-          data: null,
-          message: "用户名或密码不能为空",
-        };
+        return { code: 40001, data: null, message: "请输入用户名和密码" };
       }
 
-      // 生成 Token
-      const accessToken = generateMockAccessToken();
-      const refreshToken = generateMockRefreshToken();
-      const now = Date.now();
+      /* 在已注册用户中查找 */
+      const user = findUserByUsername(username);
+      if (!user) {
+        console.warn(`[mock/login] 用户不存在: ${username}`);
+        return { code: 40401, data: null, message: "用户不存在" };
+      }
 
-      // 存储会话信息（用于刷新 Token 时验证）
-      mockSessionStore.set(accessToken, {
-        userId: Random.integer(1000, 9999),
-        username: String(username),
-        refreshToken,
-        createdAt: now,
+      /* 检查账号是否被禁用（被删除的用户）*/
+      if (user.status === "disabled") {
+        console.warn(`[mock/login] 账号已被禁用: ${username}`);
+        return { code: 40301, data: null, message: "该账号已被禁用，请联系管理员" };
+      }
+
+      /* 密码校验 */
+      if (user.password !== password) {
+        console.warn(`[mock/login] 密码错误: ${username}`);
+        return { code: 40002, data: null, message: "密码错误" };
+      }
+
+      /* 登录成功 → 创建会话 + 返回 Token */
+      const token = generateToken();
+      sessionStore.set(token, {
+        userId: user.id,
+        username: user.username,
+        token,
+        createdAt: Date.now(),
       });
 
-      console.log(
-        `[mock/login] ✅ 登录成功: userId=${mockSessionStore.get(accessToken)?.userId}, token=${accessToken.substring(0, 12)}...`,
-      );
+      console.log(`[mock/login] ✅ 登录成功: ${username} (${user.role})`);
 
       return {
         code: 0,
         data: {
-          accessToken,
-          refreshToken,
-          expiresIn: Math.floor(MOCK_TOKEN_EXPIRES_MS / 1000), // 返回秒数
+          accessToken: token,
+          refreshToken: `mock_refresh_${Random.string(40)}`,
+          expiresIn: 86400,
           userInfo: {
-            id: mockSessionStore.get(accessToken)?.userId,
-            username: String(username),
-            nickname: `${String(username)}_昵称`,
+            id: user.id,
+            username: user.username,
+            nickname: user.nickname,
             avatar: Random.image("100x100", "#4A90E2", "#FFF", "png", "avatar"),
-            email: `${String(username)}@example.com`,
-            role: username === "admin" ? "admin" : "user", // admin 用户拥有管理员角色
+            email: `${user.username}@example.com`,
+            role: user.role,
           },
         },
         message: "登录成功",
@@ -151,288 +238,350 @@ export default [
 
   // ==================== 刷新 Token 接口 ====================
   {
-    /** @mock 模拟刷新 Token 接口 */
     url: "/api/refresh-token",
     method: "post",
 
-    /**
-     * 刷新 Token Mock 处理函数
-     * 接收旧的 refreshToken，返回新的 accessToken 和 refreshToken
-     *
-     * @param body - 请求体，期望格式 { refreshToken: string }
-     * @returns Mock 响应数据
-     */
-    response: ({ body }: { body?: Record<string, unknown> }) => {
-      const refreshToken = body?.refreshToken ?? "";
-
-      console.log(
-        `[mock/refresh] 收到刷新请求: refreshToken=${String(refreshToken).substring(0, 16)}...`,
-      );
-
-      // 查找对应的会话
-      let sessionInfo:
-        | (typeof mockSessionStore extends Map<infer _K, infer V> ? V : never)
-        | undefined;
-
-      for (const [, session] of mockSessionStore) {
-        if (session.refreshToken === refreshToken) {
-          sessionInfo = session;
-          break;
-        }
-      }
-
-      if (!sessionInfo) {
-        console.warn("[mock/refresh] 刷新失败：无效的 Refresh Token");
-        return {
-          code: 40002,
-          data: null,
-          message: "Refresh Token 无效或已过期",
-        };
-      }
-
-      // 检查 Token 是否过期（模拟 7 天有效期）
-      const SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
-      if (Date.now() - sessionInfo.createdAt > SESSION_MAX_AGE_MS) {
-        console.warn("[mock/refresh] 刷新失败：会话已过期");
-        mockSessionStore.clear(); // 清除过期会话
-        return {
-          code: 40003,
-          data: null,
-          message: "会话已过期，请重新登录",
-        };
-      }
-
-      // 生成新 Token
-      const newAccessToken = generateMockAccessToken();
-      const newRefreshToken = generateMockRefreshToken();
-
-      // 更新会话存储（删除旧 key，插入新 key）
-      mockSessionStore.delete(sessionInfo.username); // 尝试清理旧条目
-      mockSessionStore.set(newAccessToken, {
-        ...sessionInfo,
-        refreshToken: newRefreshToken,
-        createdAt: Date.now(), // 更新创建时间
-      });
-
-      console.log(
-        `[mock/refresh] ✅ 刷新成功: newToken=${newAccessToken.substring(0, 12)}...`,
-      );
-
-      return {
-        code: 0,
-        data: {
-          accessToken: newAccessToken,
-          refreshToken: newRefreshToken,
-          expiresIn: Math.floor(MOCK_TOKEN_EXPIRES_MS / 1000),
-        },
-        message: "Token 刷新成功",
-      };
-    },
+    response: () => ({
+      code: 0,
+      data: {
+        accessToken: generateToken(),
+        refreshToken: `mock_refresh_${Random.string(40)}`,
+        expiresIn: 86400,
+      },
+      message: "Token 刷新成功",
+    }),
   } satisfies MockMethod,
 
-  // ==================== 获取当前用户信息接口 ====================
+  // ==================== 获取当前用户信息（基础）====================
   {
-    /** @mock 模拟获取当前登录用户信息接口 */
     url: "/api/user/info",
     method: "get",
 
-    /**
-     * 获取用户信息 Mock 处理函数
-     * 从 Authorization 头解析 Token，查找对应会话
-     *
-     * @param headers - 请求头，从中提取 Authorization
-     * @returns Mock 响应数据
-     */
     response: ({ headers }: { headers?: Record<string, string> }) => {
-      const authHeader = headers?.authorization ?? "";
-      const token = authHeader.replace("Bearer ", "");
-
-      console.log(
-        `[mock/user-info] 收到用户信息请求: token=${token.substring(0, 12)}...`,
-      );
-
-      // 模拟 401 场景：如果 Token 以 "expire_" 开头，返回 401
-      // 用于测试无感刷新流程
-      if (token.startsWith("expire_")) {
-        console.warn("[mock/user-info] 模拟 Token 过期，返回 401");
-        return {
-          statusCode: 401, // HTTP 401
-          code: 40100,
-          data: null,
-          message: "Token 已过期",
-        };
+      const session = getSession(headers);
+      if (!session) {
+        return { statusCode: 401, code: 40100, data: null, message: "无效的访问令牌" };
       }
 
-      const session = mockSessionStore.get(token);
-      if (!session) {
-        console.warn("[mock/user-info] 未找到对应会话，返回 401");
-        return {
-          statusCode: 401,
-          code: 40101,
-          data: null,
-          message: "无效的访问令牌",
-        };
+      const user = getUserFromSession(session);
+      if (!user) {
+        return { statusCode: 401, code: 40101, data: null, message: "用户不存在或已被删除" };
       }
 
       return {
         code: 0,
         data: {
-          id: session.userId,
-          username: session.username,
-          nickname: `${session.username}_昵称`,
+          id: user.id,
+          username: user.username,
+          nickname: user.nickname,
           avatar: Random.image("100x100", "#50E3C2", "#FFF", "png", "avatar"),
-          email: `${session.username}@example.com`,
-          roles: [session.username === "admin" ? "admin" : "user"],
-          permissions:
-            session.username === "admin"
-              ? ["*"] // 管理员拥有全部权限
-              : ["user:read", "user:write"], // 普通用户有限权限
+          email: `${user.username}@example.com`,
+          roles: [user.role],
+          permissions: user.role === "admin" ? ["*"] : ["dashboard:view", "task:view", "task:create"],
         },
         message: "获取成功",
       };
     },
   } satisfies MockMethod,
 
-  // ==================== 获取用户详细信息（含动态菜单）接口 ====================
+  // ==================== 获取用户详细信息（含菜单树）====================
   {
-    /** @mock 模拟获取用户详细信息及动态菜单树接口 */
     url: "/api/getUserInfo",
     method: "get",
 
-    /**
-     * 获取用户详细信息 Mock 处理函数
-     * 从 Authorization 头解析 Token，返回用户基本信息、角色、权限和动态菜单树
-     *
-     * @param headers - 请求头，从中提取 Authorization
-     * @returns Mock 响应数据（含菜单树）
-     *
-     * @mock 替换说明：
-     *   本接口为 Mock 数据定义，正式环境需替换为真实后端 API
-     *   替换步骤：
-     *     1. 在后端实现 /api/getUserInfo 接口，返回相同的数据结构
-     *     2. 删除本 Mock 定义或移至归档目录
-     *     3. 确保 api 模块中的请求地址指向真实后端
-     */
     response: ({ headers }: { headers?: Record<string, string> }) => {
-      const authHeader = headers?.authorization ?? "";
-      const token = authHeader.replace("Bearer ", "");
-
-      console.log(
-        `[mock/get-user-info] 收到用户详情请求: token=${token.substring(0, 12)}...`,
-      );
-
-      // 校验 Token 是否有效
-      if (token.startsWith("expire_") || !token) {
-        console.warn("[mock/get-user-info] Token 无效或已过期");
-        return {
-          statusCode: 401,
-          code: 40100,
-          data: null,
-          message: "Token 已过期或无效",
-        };
-      }
-
-      const session = mockSessionStore.get(token);
+      const session = getSession(headers);
       if (!session) {
-        console.error("[mock/get-user-info] 未找到对应会话");
-        return {
-          statusCode: 401,
-          code: 40101,
-          data: null,
-          message: "无效的访问令牌",
-        };
+        return { statusCode: 401, code: 40100, data: null, message: "无效的访问令牌" };
       }
 
-      // 根据用户角色判断是否为管理员
-      const isAdmin = session.username === "admin";
+      const user = getUserFromSession(session);
+      if (!user) {
+        return { statusCode: 401, code: 40101, data: null, message: "用户不存在或已被删除" };
+      }
 
-      /**
-       * 管理员完整菜单树
-       * 包含仪表盘、系统管理及其子菜单
-       */
-      const adminMenuList = [
-        {
-          name: "Dashboard",
-          path: "/dashboard",
-          component: "views/dashboard/index",
-          redirect: null,
-          meta: { title: "仪表盘", icon: "DashboardIcon", hidden: false },
-          children: [],
-        },
-        {
-          name: "TaskBoard",
-          path: "/task/board",
-          component: "views/task/board",
-          redirect: null,
-          meta: { title: "任务看板", icon: "GridIcon", hidden: false },
-          children: [],
-        },
-        {
-          name: "System",
-          path: "/system",
-          component: null, // 父级无组件，使用布局组件
-          redirect: "/system/user",
-          meta: { title: "系统管理", icon: "SettingIcon", hidden: false },
-          children: [
-            {
-              name: "UserManage",
-              path: "/system/user",
-              component: "views/system/user/index",
-              meta: { title: "用户管理", icon: "UserIcon" },
-            },
-          ],
-        },
-      ];
-
-      /**
-       * 普通用户菜单树
-       * 包含仪表盘和任务看板页面
-       */
-      const userMenuList = [
-        {
-          name: "Dashboard",
-          path: "/dashboard",
-          component: "views/dashboard/index",
-          redirect: null,
-          meta: { title: "仪表盘", icon: "DashboardIcon", hidden: false },
-          children: [],
-        },
-        {
-          name: "TaskBoard",
-          path: "/task/board",
-          component: "views/task/board",
-          redirect: null,
-          meta: { title: "任务看板", icon: "GridIcon", hidden: false },
-          children: [],
-        },
-      ];
+      const isAdmin = user.role === "admin";
 
       console.log(
-        `[mock/get-user-info] ✅ 返回用户信息: role=${isAdmin ? "admin" : "user"}, menuCount=${isAdmin ? adminMenuList.length : userMenuList.length}`,
+        `[mock/get-user-info] ✅ 用户信息: ${user.username} (${isAdmin ? "管理员" : "普通用户"})`,
       );
 
       return {
         code: 0,
         data: {
-          id: session.userId,
-          username: session.username,
-          nickname: `${session.username}_昵称`,
-          avatar: Random.image(
-            "100x100",
-            "#4A90E2",
-            "#FFF",
-            "png",
-            "avatar",
-          ),
-          email: `${session.username}@example.com`,
-          roles: isAdmin ? ["admin"] : ["user"], // 角色标识数组
-          permissions: isAdmin
-            ? ["*"] // 管理员拥有全部权限
-            : ["user:read", "dashboard:view"], // 普通用户有限权限
-          menuList: isAdmin ? adminMenuList : userMenuList, // 动态菜单树
+          id: user.id,
+          username: user.username,
+          nickname: user.nickname,
+          avatar: Random.image("100x100", "#4A90E2", "#FFF", "png", "avatar"),
+          email: `${user.username}@example.com`,
+          roles: [user.role],
+          permissions: isAdmin ? ["*"] : ["dashboard:view", "task:view", "task:create"],
+          menuList: isAdmin ? ADMIN_MENUS : USER_MENUS,
         },
         message: "获取成功",
       };
+    },
+  } satisfies MockMethod,
+
+  // ==================== 获取用户列表（供负责人选择等场景）====================
+  {
+    url: "/api/user/list",
+    method: "get",
+
+    /**
+     * 返回所有 active 状态的已注册用户
+     * 用于 TaskForm 的负责人下拉列表
+     */
+    response: ({ headers }: { headers?: Record<string, string> }) => {
+      const session = getSession(headers);
+      if (!session) {
+        return { statusCode: 401, code: 40100, data: null, message: "无效的访问令牌" };
+      }
+
+      /** 只返回活跃用户（排除 disabled）*/
+      const activeUsers = userStore
+        .filter((u) => u.status === "active")
+        .map((u) => ({
+          id: u.id,
+          username: u.username,
+          nickname: u.nickname,
+          role: u.role,
+        }));
+
+      console.log(`[mock/user/list] ✅ 返回活跃用户: ${activeUsers.length} 个`);
+
+      return { code: 0, data: activeUsers, message: "获取成功" };
+    },
+  } satisfies MockMethod,
+
+  // ==================== 管理页用户列表（含禁用用户，仅管理员）====================
+  {
+    url: "/api/user/manage-list",
+    method: "get",
+
+    /**
+     * 返回所有用户（含 disabled），用于管理页面展示
+     * 只有管理员可调用
+     */
+    response: ({ headers }: { headers?: Record<string, string> }) => {
+      const session = getSession(headers);
+      if (!session) {
+        return { statusCode: 401, code: 40100, data: null, message: "无效的访问令牌" };
+      }
+
+      const operator = getUserFromSession(session);
+      if (!operator || operator.role !== "admin") {
+        return { statusCode: 403, code: 40301, data: null, message: "无权限操作" };
+      }
+
+      /** 返回全部用户（包括被禁用的）*/
+      const allUsers = userStore.map((u) => ({
+        id: u.id,
+        username: u.username,
+        nickname: u.nickname,
+        role: u.role,
+        status: u.status,
+        createdAt: u.createdAt,
+      }));
+
+      console.log(`[mock/user/manage-list] ✅ 返回全部用户: ${allUsers.length} 个 (含${allUsers.filter(u => u.status === 'disabled').length}个已禁用)`);
+
+      return { code: 0, data: allUsers, message: "获取成功" };
+    },
+  } satisfies MockMethod,
+
+  // ==================== 创建用户（仅管理员）====================
+  {
+    url: "/api/user/create",
+    method: "post",
+
+    response: ({ body, headers }: { body?: Record<string, unknown>; headers?: Record<string, string> }) => {
+      const session = getSession(headers);
+      if (!session) {
+        return { statusCode: 401, code: 40100, data: null, message: "无效的访问令牌" };
+      }
+
+      /* 权限检查：只有管理员可创建用户 */
+      const operator = getUserFromSession(session);
+      if (!operator || operator.role !== "admin") {
+        return { statusCode: 403, code: 40301, data: null, message: "无权限操作" };
+      }
+
+      const username = String(body?.username ?? "").trim().toLowerCase();
+      const nickname = String(body?.nickname ?? "").trim();
+      const password = String(body?.password ?? "");
+
+      console.log(`[mock/user/create] 创建用户请求: username=${username}, nickname=${nickname}`);
+
+      /* 字段校验 */
+      if (!isValidUsername(username)) {
+        return { code: 40001, data: null, message: "用户名格式错误：需为 2~18 位纯小写英文字母" };
+      }
+      if (!isValidNickname(nickname)) {
+        return { code: 40002, data: null, message: "昵称格式错误：至少 2 个字符" };
+      }
+      if (!isValidPassword(password)) {
+        return { code: 40003, data: null, message: "密码格式错误：需为 6~18 位纯数字" };
+      }
+
+      /* 用户名唯一性检查 */
+      if (findUserByUsername(username)) {
+        return { code: 40901, data: null, message: "用户名已存在" };
+      }
+
+      /* 创建新用户 */
+      const now = new Date();
+      /* 转换为北京时间（UTC+8）格式：YYYY-MM-DD HH:mm:ss */
+      const beijingTime = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+      const createdAtStr = beijingTime.toISOString().replace("T", " ").slice(0, 19);
+
+      const newUser: StoredUser = {
+        id: userIdCounter++,
+        username,
+        nickname,
+        password,
+        role: "user",
+        status: "active",
+        createdAt: createdAtStr,
+      };
+
+      userStore.push(newUser);
+
+      console.log(`[mock/user/create] ✅ 用户创建成功: ${username} (id=${newUser.id}, 总计${userStore.length})`);
+
+      return {
+        code: 0,
+        data: { id: newUser.id, username: newUser.username, nickname: newUser.nickname, role: newUser.role },
+        message: "创建成功",
+      };
+    },
+  } satisfies MockMethod,
+
+  // ==================== 更新用户（仅管理员）====================
+  {
+    url: "/api/user/update",
+    method: "post",
+
+    response: ({ body, headers }: { body?: Record<string, unknown>; headers?: Record<string, string> }) => {
+      const session = getSession(headers);
+      if (!session) {
+        return { statusCode: 401, code: 40100, data: null, message: "无效的访问令牌" };
+      }
+
+      const operator = getUserFromSession(session);
+      if (!operator || operator.role !== "admin") {
+        return { statusCode: 403, code: 40301, data: null, message: "无权限操作" };
+      }
+
+      const targetId = Number(body?.id);
+      const targetUser = findUserById(targetId);
+
+      if (!targetUser) {
+        return { code: 40401, data: null, message: "目标用户不存在" };
+      }
+
+      console.log(`[mock/user/update] 更新用户: target=${targetUser.username}, operator=${operator.username}`);
+
+      /* 规则：不能修改自己的角色（防止把自己降级导致无人管理）*/
+      if (targetId === operator.id && body?.role !== undefined && String(body.role) !== operator.role) {
+        return { code: 40302, data: null, message: "不能修改自己的角色" };
+      }
+
+      /* 规则：不能修改自己的状态（防止禁用自己）*/
+      if (targetId === operator.id && body?.status !== undefined) {
+        return { code: 40303, data: null, message: "不能修改自己的状态" };
+      }
+
+      /* 更新允许的字段（用户名不可变）*/
+      if (body?.nickname !== undefined) {
+        const newNickname = String(body.nickname).trim();
+        if (!isValidNickname(newNickname)) {
+          return { code: 40002, data: null, message: "昵称格式错误：至少 2 个字符" };
+        }
+        targetUser.nickname = newNickname;
+      }
+      if (body?.password !== undefined) {
+        const newPassword = String(body.password);
+        if (!isValidPassword(newPassword)) {
+          return { code: 40003, data: null, message: "密码格式错误：需为 6~18 位纯数字" };
+        }
+        targetUser.password = newPassword;
+      }
+      if (body?.role !== undefined) {
+        targetUser.role = String(body.role) as UserRole;
+      }
+      if (body?.status !== undefined) {
+        targetUser.status = String(body.status) as UserStatus;
+      }
+
+      console.log(`[mock/user/update] ✅ 用户更新成功: ${targetUser.username} (role=${targetUser.role}, status=${targetUser.status})`);
+
+      return {
+        code: 0,
+        data: { success: true, id: targetUser.id },
+        message: "更新成功",
+      };
+    },
+  } satisfies MockMethod,
+
+  // ==================== 删除用户（仅管理员，只能删普通用户）====================
+  {
+    url: "/api/user/delete",
+    method: "post",
+
+    response: ({ body, headers }: { body?: Record<string, unknown>; headers?: Record<string, string> }) => {
+      const session = getSession(headers);
+      if (!session) {
+        return { statusCode: 401, code: 40100, data: null, message: "无效的访问令牌" };
+      }
+
+      const operator = getUserFromSession(session);
+      if (!operator || operator.role !== "admin") {
+        return { statusCode: 403, code: 40301, data: null, message: "无权限操作" };
+      }
+
+      const targetId = Number(body?.id);
+      const targetUser = findUserById(targetId);
+
+      if (!targetUser) {
+        return { code: 40401, data: null, message: "目标用户不存在" };
+      }
+
+      console.log(`[mock/user/delete] 删除请求: target=${targetUser.username} (${targetUser.role}), operator=${operator.username}`);
+
+      /* 不能删自己 */
+      if (targetId === operator.id) {
+        return { code: 40304, data: null, message: "不能删除自己" };
+      }
+
+      /* 只能删普通用户（不能删其他管理员）*/
+      if (targetUser.role === "admin") {
+        return { code: 40305, data: null, message: "不能删除管理员账户" };
+      }
+
+      /* 根据请求参数判断：软删除（禁用）或 硬删除（彻底移除）*/
+      const isHardDelete = body?.hardDelete === true;
+
+      if (isHardDelete) {
+        /* 硬删除：从 userStore 中彻底移除该用户 */
+        const index = userStore.findIndex((u) => u.id === targetId);
+        if (index === -1) {
+          return { code: 40401, data: null, message: "目标用户不存在" };
+        }
+
+        userStore.splice(index, 1);
+
+        console.log(`[mock/user/delete] ✅ 用户已永久删除: ${targetUser.username} (剩余${userStore.length}个用户)`);
+
+        return { code: 0, data: { success: true, id: targetUser.id }, message: "删除成功" };
+      } else {
+        /* 软删除（默认）：标记为 disabled，保留数据但禁止登录 */
+        targetUser.status = "disabled";
+
+        console.log(`[mock/user/delete] ✅ 用户已禁用: ${targetUser.username} (不再可登录)`);
+
+        return { code: 0, data: { success: true, id: targetUser.id }, message: "删除成功" };
+      }
     },
   } satisfies MockMethod,
 ];

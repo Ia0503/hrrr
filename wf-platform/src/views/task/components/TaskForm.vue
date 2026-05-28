@@ -1,15 +1,17 @@
 <script setup lang="ts">
 /**
- * @fileoverview 任务表单弹窗组件（Phase 5 业务演示页）
+ * 任务表单弹窗组件
  *
  * 核心功能：
  * - 基于 SchemaForm 的 schema 驱动动态表单
  * - 新建 / 编辑双模式支持
+ * - 负责人列表从用户 API 动态加载
  * - 表单校验与提交（含防重复点击）
  */
 
-import { ref, watch } from "vue";
+import { ref, watch, onMounted } from "vue";
 import { ElMessage } from "element-plus";
+import request from "@/utils/request";
 
 import type { TaskItem } from "@/stores/task";
 import type { SchemaFormItem } from "@/components/SchemaForm/types";
@@ -22,9 +24,7 @@ import SchemaForm from "@/components/SchemaForm/SchemaForm.vue";
  * ============================================================ */
 
 interface Props {
-  /** 弹窗是否可见 */
   modelValue: boolean;
-  /** 编辑模式：传入已有任务数据则为编辑，否则为新建 */
   taskData?: TaskItem | null;
 }
 
@@ -38,14 +38,66 @@ const emit = defineEmits<{
 }>();
 
 /* ============================================================
+ * 动态数据：负责人列表（从用户 API 获取）
+ * ============================================================ */
+
+/** 用户列表项结构 */
+interface UserOption {
+  id: number;
+  username: string;
+  nickname: string;
+  role: string;
+}
+
+/** 已注册的用户列表（用于负责人下拉）*/
+const userList = ref<UserOption[]>([]);
+
+/** 是否正在加载用户列表 */
+const loadingUsers = ref(false);
+
+/**
+ * 从后端获取已注册用户列表
+ * 用于填充"负责人"下拉选项
+ */
+async function fetchUserList(): Promise<void> {
+  loadingUsers.value = true;
+  try {
+    const res = await request.get("/api/user/list");
+    userList.value = res as UserOption[];
+    console.log(`[task-form] ✅ 负责人列表加载完成，共 ${userList.value.length} 个用户`);
+
+    /** 同步更新 schema 中负责人选项 */
+    const assigneeField = taskFormSchema.find((f) => f.field === "assignee");
+    if (assigneeField) {
+      assigneeField.options = userList.value.map((u) => ({
+        label: u.nickname,
+        value: u.nickname,
+      }));
+      console.log(
+        `[task-form] 负责人选项已更新:`,
+        assigneeField.options.map((o) => o.label).join(", "),
+      );
+    }
+  } catch (error) {
+    console.error("[task-form] ❌ 获取用户列表失败:", error);
+    ElMessage.warning("无法加载负责人列表，请刷新重试");
+  } finally {
+    loadingUsers.value = false;
+  }
+}
+
+/* ============================================================
  * 提交防抖状态
  * ============================================================ */
 
-/** 提交中标志位，防止重复点击 */
 const submitting = ref(false);
 
 /* ============================================================
  * 任务表单 Schema 定义
+ *
+ * 注意：负责人选项初始为空数组，
+ * 组件挂载后会通过 fetchUserList() 从 API 动态填充。
+ * 其他固定选项（任务类型、优先级等）由前端定义。
  * ============================================================ */
 
 const taskFormSchema: SchemaFormItem[] = [
@@ -90,13 +142,7 @@ const taskFormSchema: SchemaFormItem[] = [
     label: "负责人",
     component: ComponentType.SELECT,
     required: true,
-    options: [
-      { label: "张三", value: "张三" },
-      { label: "李四", value: "李四" },
-      { label: "王五", value: "王五" },
-      { label: "赵六", value: "赵六" },
-      { label: "钱七", value: "钱七" },
-    ],
+    options: [], // 初始为空，由 fetchUserList() 动态填充
     componentProps: { placeholder: "请选择负责人", filterable: true },
   },
   {
@@ -180,13 +226,21 @@ const handleFieldChange = (field: string, value: unknown) => {
 };
 
 /* ============================================================
- * 弹窗可见性监听
+ * 弹窗可见性监听 + 用户列表预加载
  * ============================================================ */
+
+/** 首次挂载时预加载用户列表 */
+onMounted(() => {
+  fetchUserList();
+});
 
 watch(
   () => props.modelValue,
   (visible) => {
     if (visible) {
+      /** 每次打开弹窗时刷新用户列表（防止新建用户后选项不更新）*/
+      fetchUserList();
+
       if (props.taskData) {
         Object.assign(formModel.value, props.taskData);
         console.log("[task-form] 编辑模式，已填充任务数据:", props.taskData.title);
@@ -281,12 +335,10 @@ const handleCancel = () => {
 </template>
 
 <style scoped>
-/* ==================== 弹窗整体样式 ==================== */
 .wf-task-form-dialog {
   --wf-dialog-radius: 12px;
 }
 
-/* 覆盖 el-dialog 默认圆角 */
 .wf-task-form-dialog :deep(.el-dialog) {
   border-radius: var(--wf-dialog-radius);
   overflow: hidden;
@@ -315,14 +367,12 @@ const handleCancel = () => {
   background-color: #fafbfc;
 }
 
-/* ==================== 表单滚动区域 ==================== */
 .wf-task-form__body {
   max-height: 60vh;
   padding: 20px 24px;
   overflow-y: auto;
 }
 
-/* 自定义滚动条 */
 .wf-task-form__body::-webkit-scrollbar {
   width: 6px;
 }
@@ -340,7 +390,6 @@ const handleCancel = () => {
   background-color: transparent;
 }
 
-/* ==================== 底部按钮区域 ==================== */
 .wf-task-form__footer {
   display: flex;
   justify-content: flex-end;
