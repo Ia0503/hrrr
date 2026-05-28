@@ -287,6 +287,46 @@ export const useTaskStore = defineStore("task", () => {
     }
   }
 
+  /**
+   * 更新任务信息（编辑模式）
+   *
+   * 从详情弹窗的编辑表单提交后调用：
+   *   1. 调用后端 API 持久化更新
+   *   2. 成功后在本地 boardColumns 中找到对应任务并原地更新字段
+   *   3. API 失败时抛出错误，由调用方处理提示
+   *
+   * @param formData - 编辑表单提交的数据（包含 id 及其他可编辑字段）
+   * @returns Promise<void>
+   */
+  async function updateTask(formData: Record<string, unknown>): Promise<void> {
+    const taskId = formData.id as number | string;
+
+    console.log(`[task-store] 📝 开始更新任务: id=${taskId}, title="${formData.title}"`);
+
+    try {
+      /* 调用更新接口，由后端/Mock 处理持久化 */
+      await request.post("/api/task/update", formData);
+
+      /* 在本地看板数据中找到该任务并原地更新（保持响应式引用不变）*/
+      for (const col of boardColumns.value) {
+        const taskIdx = col.taskList.findIndex((t) => t.id === taskId);
+        if (taskIdx !== -1) {
+          Object.assign(col.taskList[taskIdx], formData);
+          console.log(
+            `[task-store] ✅ 任务已更新: id=${taskId}, 列=[${col.id}]`,
+          );
+          return;
+        }
+      }
+
+      /* 本地未找到该任务（异常情况）*/
+      console.warn(`[task-store] ⚠️ 更新成功但本地未找到任务: ${taskId}`);
+    } catch (error) {
+      console.error("[task-store] ❌ 任务更新失败:", error);
+      throw error;
+    }
+  }
+
   /* ============================================================
    * WebSocket 实时同步 Actions
    * ============================================================
@@ -464,6 +504,7 @@ export const useTaskStore = defineStore("task", () => {
     moveTask,
     reorderWithinColumn,
     addTask, // 新增任务到看板（SchemaForm 提交时调用）
+    updateTask, // 更新任务信息（编辑模式）
     // WebSocket 实时同步方法
     initSocketListeners, // 初始化 WebSocket 事件监听（进入看板页面时调用）
     cleanupSocketListeners, // 清理 WebSocket 监听器（离开看板页面时调用）

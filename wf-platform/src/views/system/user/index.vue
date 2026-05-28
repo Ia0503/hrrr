@@ -505,4 +505,43 @@ async function handleDelete(user: UserInfo): Promise<void> {
   line-height: 1.4;
   margin-top: 4px;
 }
+
+/* ============================================================
+ * 响应式设计
+ * ============================================================ */
+
+/**
+ * 平板/移动端适配（< 1024px）
+ */
+@media screen and (max-width: 1023px) {
+  .wf-user-manage {
+    gap: 12px;
+  }
+
+  .wf-user-manage__header {
+    padding-bottom: 8px;
+  }
+
+  .wf-user-manage__title {
+    font-size: 16px;
+  }
+
+  .wf-user-manage__desc {
+    font-size: 12px;
+  }
+
+  /* 工具栏换行 */
+  .wf-user-manage__toolbar {
+    flex-wrap: wrap;
+  }
+}
+
+/**
+ * 手机竖屏（< 640px）
+ */
+@media screen and (max-width: 639px) {
+  .wf-user-manage__title {
+    font-size: 15px;
+  }
+}
 </style>

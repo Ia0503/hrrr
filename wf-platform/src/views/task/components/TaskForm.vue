@@ -106,7 +106,10 @@ const taskFormSchema: SchemaFormItem[] = [
     label: "任务标题",
     component: ComponentType.INPUT,
     required: true,
-    rules: [{ min: 2, max: 50, message: "标题长度应在 2 到 50 个字符之间", trigger: "blur" }],
+    rules: [
+      { required: true, message: "请输入任务标题", trigger: "blur" },
+      { min: 2, max: 50, message: "标题长度应在 2 到 50 个字符之间", trigger: "blur" },
+    ],
     componentProps: { placeholder: "请输入任务标题", maxlength: 50, showWordLimit: true },
     tips: "简明扼要地描述任务内容",
   },
@@ -115,6 +118,7 @@ const taskFormSchema: SchemaFormItem[] = [
     label: "任务类型",
     component: ComponentType.SELECT,
     required: true,
+    rules: [{ required: true, message: "请选择任务类型", trigger: "change" }],
     options: [
       { label: "功能需求", value: "feature" },
       { label: "缺陷 Bug", value: "bug" },
@@ -129,6 +133,7 @@ const taskFormSchema: SchemaFormItem[] = [
     label: "优先级",
     component: ComponentType.RADIO,
     required: true,
+    rules: [{ required: true, message: "请选择任务优先级", trigger: "change" }],
     options: [
       { label: "紧急", value: "urgent" },
       { label: "高", value: "high" },
@@ -142,6 +147,7 @@ const taskFormSchema: SchemaFormItem[] = [
     label: "负责人",
     component: ComponentType.SELECT,
     required: true,
+    rules: [{ required: true, message: "请选择任务负责人", trigger: "change" }],
     options: [], // 初始为空，由 fetchUserList() 动态填充
     componentProps: { placeholder: "请选择负责人", filterable: true },
   },
@@ -150,6 +156,7 @@ const taskFormSchema: SchemaFormItem[] = [
     label: "初始状态",
     component: ComponentType.SELECT,
     required: true,
+    rules: [{ required: true, message: "请选择任务初始状态", trigger: "change" }],
     options: [
       { label: "待处理", value: "todo" },
       { label: "进行中", value: "doing" },
@@ -162,7 +169,10 @@ const taskFormSchema: SchemaFormItem[] = [
     label: "任务描述",
     component: ComponentType.TEXTAREA,
     required: true,
-    rules: [{ min: 10, message: "任务描述至少需要 10 个字符", trigger: "blur" }],
+    rules: [
+      { required: true, message: "请输入任务描述", trigger: "blur" },
+      { min: 10, message: "任务描述至少需要 10 个字符", trigger: "blur" },
+    ],
     componentProps: {
       placeholder: "请详细描述任务内容、验收标准等...",
       rows: 4,

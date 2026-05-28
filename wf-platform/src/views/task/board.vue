@@ -10,11 +10,11 @@
  */
 
 import { ref, onMounted, onUnmounted } from "vue";
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import { Loading } from "@element-plus/icons-vue";
 import { VueDraggable } from "vue-draggable-plus";
 import { useTaskStore } from "@/stores/task";
-import type { BoardColumn, TaskPriority } from "@/stores/task";
+import type { BoardColumn, TaskPriority, TaskItem } from "@/stores/task";
 
 /** WebSocket 管理器实例 */
 import { getWebSocketManager } from "@/utils/websocket";
@@ -34,6 +34,15 @@ const loading = ref(true);
 
 /** 新建任务弹窗可见性 */
 const showTaskFormDialog = ref(false);
+
+/** 当前选中的任务（用于详情弹窗展示） */
+const selectedTask = ref<TaskItem | null>(null);
+
+/** 任务详情弹窗可见性 */
+const showDetailDialog = ref(false);
+
+/** 编辑模式下的待编辑任务数据（传给 TaskForm 组件） */
+const editingTaskData = ref<TaskItem | null>(null);
 
 /** WebSocket 连接状态（用于 UI 展示） */
 const wsConnected = ref(false);
@@ -207,6 +216,45 @@ function formatDate(dateStr: string | undefined): string {
   }
 }
 
+/**
+ * 格式化日期时间（含时分秒）
+ *
+ * @param dateStr - ISO 格式日期时间字符串
+ * @returns 格式化后的完整时间文本（如 "2024-01-15 14:30"）
+ */
+function formatDateTime(dateStr: string | undefined): string {
+  if (!dateStr) return "未知时间";
+  try {
+    const date = new Date(dateStr);
+    /* 使用北京时间格式化，避免时区偏差 */
+    return date.toLocaleString("zh-CN", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+  } catch {
+    return "时间格式异常";
+  }
+}
+
+/**
+ * 将状态值转为中文显示文本
+ *
+ * @param status - 状态枚举值（对应看板列 id）
+ * @returns 中文显示名称
+ */
+function getStatusLabel(status: string): string {
+  const statusMap: Record<string, string> = {
+    todo: "待处理",
+    doing: "进行中",
+    done: "已完成",
+  };
+  return statusMap[status] || status || "未设置";
+}
+
 /* ============================================================
  * 新建任务弹窗
  * ============================================================ */
@@ -232,6 +280,118 @@ const handleTaskFormSubmit = async (data: Record<string, unknown>) => {
   } catch (error) {
     console.error("[board] ❌ 创建任务失败:", error);
     ElMessage.error("创建失败，请重试");
+  }
+};
+
+/* ============================================================
+ * 任务详情弹窗
+ * ============================================================ */
+
+/**
+ * 打开任务详情弹窗
+ *
+ * @param task - 被点击的任务卡片对应的数据对象
+ */
+function openDetailDialog(task: TaskItem): void {
+  console.log(`[board] 👁️ 打开任务详情: id=${task.id}, title=${task.title}`);
+  selectedTask.value = task;
+  showDetailDialog.value = true;
+}
+
+/**
+ * 从详情弹窗进入编辑模式
+ *
+ * 关闭详情弹窗 → 将当前选中任务赋值给 editingTaskData → 打开 TaskForm 编辑弹窗
+ */
+function handleEditTask(): void {
+  if (!selectedTask.value) {
+    console.warn("[board] ⚠️ 无选中任务，无法编辑");
+    return;
+  }
+
+  console.log(`[board] ✏️ 进入编辑模式: id=${selectedTask.value.id}`);
+
+  /* 关闭详情弹窗，切换到编辑表单 */
+  showDetailDialog.value = false;
+
+  /* 将当前任务数据传给 TaskForm 组件，触发编辑模式 */
+  editingTaskData.value = { ...selectedTask.value };
+  showTaskFormDialog.value = true;
+}
+
+/**
+ * 删除当前选中的任务
+ *
+ * 流程：
+ *   1. 弹出二次确认框（ElMessageBox.confirm）
+ *   2. 用户确认后调用 /api/task/delete 接口
+ *   3. 成功后刷新看板数据并关闭弹窗
+ */
+async function handleDeleteTask(): Promise<void> {
+  if (!selectedTask.value) {
+    console.warn("[board] ⚠️ 无选中任务，无法删除");
+    return;
+  }
+
+  const taskTitle = selectedTask.value.title || "未命名任务";
+
+  try {
+    /* 二次确认：防止误删 */
+    await ElMessageBox.confirm(
+      `确定要删除任务「${taskTitle}」吗？此操作不可恢复。`,
+      "删除确认",
+      {
+        confirmButtonText: "确认删除",
+        cancelButtonText: "取消",
+        type: "warning",
+        confirmButtonClass: "el-button--danger",
+      },
+    );
+
+    console.log(`[board] 🗑️ 用户确认删除任务: id=${selectedTask.value.id}`);
+
+    /* 调用删除接口 */
+    await request.delete("/api/task/delete", {
+      data: { id: selectedTask.value.id },
+    });
+
+    ElMessage.success(`任务「${taskTitle}」已删除`);
+    console.log(`[board] ✅ 任务删除成功，刷新看板数据`);
+
+    /* 关闭详情弹窗并刷新看板 */
+    showDetailDialog.value = false;
+    selectedTask.value = null;
+
+    await taskStore.fetchBoardData();
+  } catch (error: any) {
+    /* 用户点击"取消"时 error 为 'cancel'，不需要提示错误 */
+    if (error === "cancel") {
+      console.log("[board] 用户取消了删除操作");
+      return;
+    }
+
+    console.error("[board] ❌ 删除任务失败:", error);
+    ElMessage.error("删除失败，请重试");
+  }
+}
+
+/**
+ * TaskForm 编辑提交回调（编辑模式下复用）
+ *
+ * 与新建提交的区别：需要调用更新接口而非创建接口
+ */
+const handleEditFormSubmit = async (data: Record<string, unknown>) => {
+  console.log("[board] 📝 收到编辑任务提交数据:", JSON.stringify(data, null, 2));
+
+  try {
+    await taskStore.updateTask(data);
+    ElMessage.success(`任务 "${String(data.title || "未命名")}" 更新成功！`);
+  } catch (error) {
+    console.error("[board] ❌ 更新任务失败:", error);
+    ElMessage.error("更新失败，请重试");
+  } finally {
+    /* 编辑完成后清空 editingTaskData，避免下次打开新建弹窗时残留数据 */
+    editingTaskData.value = null;
   }
 };
 </script>
@@ -293,6 +453,10 @@ const handleTaskFormSubmit = async (data: Record<string, unknown>) => {
           :animation="200"
           ghost-class="wf-task-card--ghost"
           drag-class="wf-task-card--drag"
+          :scroll="true"
+          :scroll-sensitivity="80"
+          :scroll-speed="12"
+          force-fallback
           @end="onDragEnd"
         >
           <article
@@ -300,6 +464,7 @@ const handleTaskFormSubmit = async (data: Record<string, unknown>) => {
             :key="task.id"
             :data-id="task.id"
             class="wf-task-card"
+            @click="openDetailDialog(task)"
           >
             <div class="wf-task-card__handle">
               <span class="wf-task-card__grip">⋮⋮</span>
@@ -343,11 +508,120 @@ const handleTaskFormSubmit = async (data: Record<string, unknown>) => {
       </section>
     </main>
 
-    <!-- ==================== 新建任务弹窗 ==================== -->
+    <!-- ==================== 新建/编辑任务弹窗 ==================== -->
     <TaskForm
       v-model="showTaskFormDialog"
-      @submit="handleTaskFormSubmit"
+      :task-data="editingTaskData"
+      :submit="editingTaskData ? handleEditFormSubmit : handleTaskFormSubmit"
+      @submit="editingTaskData ? handleEditFormSubmit($event) : handleTaskFormSubmit($event)"
     />
+
+    <!-- ==================== 任务详情弹窗 ==================== -->
+    <el-dialog
+      v-model="showDetailDialog"
+      title="任务详情"
+      width="560px"
+      :close-on-click-modal="true"
+      destroy-on-close
+      class="wf-detail-dialog"
+      @closed="selectedTask = null"
+    >
+      <!-- 详情内容区域：展示任务完整信息 -->
+      <div v-if="selectedTask" class="wf-detail-dialog__body">
+        <!-- 标题行 -->
+        <div class="wf-detail-dialog__title-row">
+          <h3 class="wf-detail-dialog__title">{{ selectedTask.title }}</h3>
+          <el-tag
+            size="small"
+            :type="getPriorityTagType(selectedTask.priority)"
+            effect="dark"
+            round
+          >
+            {{ getPriorityLabel(selectedTask.priority) }}
+          </el-tag>
+        </div>
+
+        <!-- 描述 -->
+        <section class="wf-detail-dialog__section">
+          <h4 class="wf-detail-dialog__section-title">任务描述</h4>
+          <p class="wf-detail-dialog__desc">
+            {{ selectedTask.description || "暂无描述" }}
+          </p>
+        </section>
+
+        <!-- 元信息网格 -->
+        <div class="wf-detail-dialog__meta-grid">
+          <!-- 负责人 -->
+          <div class="wf-detail-dialog__meta-item">
+            <span class="wf-detail-dialog__meta-label">负责人</span>
+            <span class="wf-detail-dialog__meta-value">
+              {{ selectedTask.assignee || "未指派" }}
+            </span>
+          </div>
+
+          <!-- 状态 -->
+          <div class="wf-detail-dialog__meta-item">
+            <span class="wf-detail-dialog__meta-label">状态</span>
+            <span class="wf-detail-dialog__meta-value">
+              {{ getStatusLabel(selectedTask.status) }}
+            </span>
+          </div>
+
+          <!-- 优先级 -->
+          <div class="wf-detail-dialog__meta-item">
+            <span class="wf-detail-dialog__meta-label">优先级</span>
+            <span class="wf-detail-dialog__meta-value">
+              {{ getPriorityLabel(selectedTask.priority) }}
+            </span>
+          </div>
+
+          <!-- 截止日期 -->
+          <div class="wf-detail-dialog__meta-item">
+            <span class="wf-detail-dialog__meta-label">截止日期</span>
+            <span class="wf-detail-dialog__meta-value">
+              {{ formatDate(selectedTask.dueDate) }}
+            </span>
+          </div>
+
+          <!-- 创建时间 -->
+          <div class="wf-detail-dialog__meta-item">
+            <span class="wf-detail-dialog__meta-label">创建时间</span>
+            <span class="wf-detail-dialog__meta-value">
+              {{ formatDateTime(selectedTask.createdAt) }}
+            </span>
+          </div>
+        </div>
+
+        <!-- 标签列表 -->
+        <section v-if="selectedTask.tags && selectedTask.tags.length" class="wf-detail-dialog__section">
+          <h4 class="wf-detail-dialog__section-title">标签</h4>
+          <div class="wf-detail-dialog__tags">
+            <el-tag
+              v-for="(tag, idx) in selectedTask.tags"
+              :key="idx"
+              size="small"
+              type="info"
+              effect="plain"
+              class="wf-detail-dialog__tag"
+            >
+              #{{ tag }}
+            </el-tag>
+          </div>
+        </section>
+      </div>
+
+      <!-- 底部操作按钮：编辑 + 删除 -->
+      <template #footer>
+        <div class="wf-detail-dialog__footer">
+          <el-button type="primary" @click="handleEditTask">
+            编 辑
+          </el-button>
+          <el-button type="danger" plain @click="handleDeleteTask">
+            删 除
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -358,10 +632,12 @@ const handleTaskFormSubmit = async (data: Record<string, unknown>) => {
 .wf-board {
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  height: calc(100vh - 84px); /* 大屏：减去顶部导航栏高度，填满剩余视口 */
+  min-height: 0; /* 关键：允许 flex 子项收缩到小于内容高度 */
   padding: 20px 24px;
   gap: 16px;
   background-color: #f0f2f5;
+  overflow: hidden;
 
   /* 禁止看板区域文字选中，防止拖拽时触发浏览器选区 */
   -webkit-user-select: none;
@@ -467,19 +743,108 @@ const handleTaskFormSubmit = async (data: Record<string, unknown>) => {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 16px;
-  min-height: 0;
-  overflow-x: auto;
+  min-height: 0; /* 允许 flex 子项收缩（关键：否则子元素高度不受限）*/
+  overflow: hidden; /* 防止内容撑破容器 */
 }
 
-/* 响应式：小屏幕下改为纵向滚动 */
-@media (max-width: 1024px) {
-  .wf-board__columns {
-    grid-template-columns: 1fr;
-    overflow-y: auto;
+/* ============================================================
+ * 响应式设计
+ * ============================================================ */
+
+/**
+ * 平板/移动端适配（< 1024px）
+ * 看板列改为纵向堆叠，高度自适应
+ */
+@media screen and (max-width: 1023px) {
+  .wf-board {
+    /* 小屏不再强制占满视口高度，改为自适应内容高度 */
+    height: auto;
+    min-height: calc(100vh - 84px);
+    overflow: visible;
+    padding: 12px 8px;
+    gap: 12px;
   }
 
+  .wf-board__header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 4px 0;
+  }
+
+  .wf-board__title {
+    font-size: 16px;
+  }
+
+  .wf-board__subtitle {
+    font-size: 12px;
+  }
+
+  .wf-board__header-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  /* 看板列：单列纵向排列 */
+  .wf-board__columns {
+    grid-template-columns: 1fr;
+    overflow: visible;
+    min-height: auto;
+  }
+
+  /* 每列不再限制最大高度 */
+  .wf-board-column {
+    max-width: none;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .wf-board-column__list {
+    max-height: none; /* 移除大屏的显示上限限制 */
+    overflow-y: visible;
+  }
+
+  /* 卡片字体缩小 */
+  .wf-task-card__title {
+    font-size: 13px;
+  }
+  .wf-task-card__desc {
+    font-size: 11px;
+    -webkit-line-clamp: 1; /* 描述只显示一行 */
+  }
+  .wf-task-card__meta {
+    font-size: 11px;
+  }
+}
+
+/**
+ * 手机竖屏（< 640px）
+ * 进一步压缩间距和字号
+ */
+@media screen and (max-width: 639px) {
   .wf-board {
-    overflow-y: auto;
+    padding: 8px 4px;
+    gap: 8px;
+  }
+
+  .wf-board__title {
+    font-size: 15px;
+  }
+
+  .wf-board-column__header {
+    padding: 10px 12px;
+  }
+
+  .wf-board-column__title {
+    font-size: 13px;
+  }
+
+  .wf-task-card {
+    padding: 10px 12px;
+  }
+
+  .wf-task-card__title {
+    font-size: 12px;
   }
 }
 
@@ -493,6 +858,8 @@ const handleTaskFormSubmit = async (data: Record<string, unknown>) => {
   border-radius: 10px;
   min-width: 300px;
   max-width: 380px;
+  max-height: 100%; /* 不超过父容器高度，确保内部滚动区 max-height 生效 */
+  overflow: hidden; /* 裁剪超出部分，防止任务列表撑开列 */
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
 
   /* 继承父级禁止选中，确保列内也不会触发文字选区 */
@@ -533,11 +900,17 @@ const handleTaskFormSubmit = async (data: Record<string, unknown>) => {
   line-height: 22px;
 }
 
-/* 任务列表滚动区 */
+/* 任务列表滚动区
+ *
+ * 布局设计（自适应高度）：
+ *   - flex: 1 + overflow-y: auto: 自动填充列内剩余空间，超出时纵向滚动
+ *   - 不设 max-height：由父容器高度约束自然决定显示数量
+ *   - 配合 VueDraggable 的 :scroll 属性，拖拽时接触边缘可自动滚动
+ */
 .wf-board-column__list {
   flex: 1;
   padding: 10px 12px;
-  overflow-y: auto;
+  overflow-y: auto; /* 超出时显示滚动条 */
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -695,5 +1068,136 @@ const handleTaskFormSubmit = async (data: Record<string, unknown>) => {
 .wf-task-card__tag {
   color: #6366f1;
   font-size: 11px;
+}
+
+/* ============================================================
+ * 任务详情弹窗
+ * ============================================================ */
+
+.wf-detail-dialog :deep(.el-dialog) {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.wf-detail-dialog :deep(.el-dialog__header) {
+  padding: 16px 24px;
+  margin: 0;
+  border-bottom: 1px solid #ebeef5;
+  background-color: #fafbfc;
+}
+
+.wf-detail-dialog :deep(.el-dialog__title) {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.wf-detail-dialog :deep(.el-dialog__body) {
+  padding: 0;
+}
+
+.wf-detail-dialog :deep(.el-dialog__footer) {
+  padding: 12px 24px;
+  border-top: 1px solid #ebeef5;
+  background-color: #fafbfc;
+}
+
+/* 详情内容区 */
+.wf-detail-dialog__body {
+  padding: 20px 24px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+/* 标题行：任务名称 + 优先级标签 */
+.wf-detail-dialog__title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  padding-bottom: 14px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.wf-detail-dialog__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+/* 信息分区（描述 / 标签等） */
+.wf-detail-dialog__section {
+  margin-bottom: 18px;
+}
+
+.wf-detail-dialog__section-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.wf-detail-dialog__desc {
+  margin: 0;
+  font-size: 14px;
+  color: #374151;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 元信息网格：两列布局展示字段键值对 */
+.wf-detail-dialog__meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px 24px;
+  padding: 14px 16px;
+  background-color: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #f0f0f0;
+  margin-bottom: 18px;
+}
+
+.wf-detail-dialog__meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.wf-detail-dialog__meta-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.wf-detail-dialog__meta-value {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1f2937;
+}
+
+/* 标签列表 */
+.wf-detail-dialog__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.wf-detail-dialog__tag {
+  cursor: default;
+}
+
+/* 底部操作按钮区域 */
+.wf-detail-dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
 }
 </style>

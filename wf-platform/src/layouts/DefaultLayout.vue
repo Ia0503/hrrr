@@ -1,179 +1,157 @@
 <!--
   DefaultLayout 默认布局组件
   ============================
-  基于 Element Plus Container 构建的经典后台管理系统布局
+  响应式双模式布局：
 
-  布局结构：
-    ┌──────────────────────────────────────────────┐
-    │              Header（顶部导航栏）               │  ← el-header: Logo + 用户信息
-    ├─────────────┬─────────────────────────────────┤
-    │             │                                 │
-    │   Aside     │           Main                  │  ← el-main: <router-view />
-    │ （侧边栏菜单）│       （主内容区域）             │
-    │             │                                 │
-    └─────────────┴─────────────────────────────────┘
+  大屏（≥1024px）经典后台：
+    ┌──────────────────────────────────────┐
+    │  Header: Logo + 用户名               │
+    ├──────────┬───────────────────────────┤
+    │          │                           │
+    │ 侧边栏   │      主内容区              │
+    │（不折叠）│                           │
+    │          │                           │
+    └──────────┴───────────────────────────┘
 
-  核心功能：
-    - 左侧边栏：从 userStore.menuList 动态渲染多级导航菜单（递归组件）
-    - 顶部导航：展示系统 Logo 与当前登录用户信息
-    - 内容区域：通过 <router-view /> 渲染匹配的路由页面组件
+  小屏（<1024px）移动端：
+    ┌──────────────────────────────────────┐
+    │  Logo        [仪表盘] [看板] [系统▾]  │  ← 水平导航
+    ├──────────────────────────────────────┤
+    │                                      │
+    │           主内容区                    │
+    │         （纵向全宽）                  │
+    │                                      │
+    └──────────────────────────────────────┘
 -->
 <script setup lang="ts">
 /**
- * DefaultLayout 组件 - 应用主布局容器
+ * DefaultLayout 组件 - 应用主布局容器（响应式双模式）
  *
- * 技术栈：
- *   - Vue 3 Composition API（<script setup> 语法糖）
- *   - TypeScript 类型安全
- *   - Element Plus UI 组件库（Container 布局体系）
- *   - Tailwind CSS v4 原子化工具类
- *   - Pinia 状态管理（userStore）
- *   - Vue Router 路由管理
+ * 技术栈：Vue 3 Composition API + TypeScript + Element Plus + Pinia
  */
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
+import { ElMessageBox, ElMessage } from "element-plus";
 import { useUserStore } from "@/stores/user";
 
 /* ==================== 实例初始化 ==================== */
 
-/** Vue Router 路由实例，用于编程式导航 */
 const router = useRouter();
-
-/** Pinia 用户状态管理实例，获取菜单列表与用户信息 */
 const userStore = useUserStore();
 
 /* ==================== 响应式状态 ==================== */
 
-/**
- * 当前激活的菜单项索引
- * 用于 el-menu 的 :default-active 属性，高亮显示当前路由对应的菜单项
- * @type {import("vue").Ref<string>}
- */
+/** 当前激活的菜单项索引 */
 const activeMenu = ref("");
 
-/**
- * 菜单是否折叠状态
- * @type {import("vue").Ref<boolean>}
- */
-const isCollapse = ref(false);
+/** 移动端导航是否展开 */
+const isMobileNavOpen = ref(false);
 
 /* ==================== 计算属性 ==================== */
 
-/**
- * 过滤后的可见菜单列表
- * 从 userStore.userInfo?.menuList 中过滤掉 hidden 为 true 的菜单项
- * 仅展示用户有权限访问的菜单
- */
+/** 过滤后的可见菜单列表 */
 const visibleMenuList = computed(() => {
   const menuList = userStore.userInfo?.menuList || [];
-  const filtered = menuList.filter(
-    (item) => item.meta.hidden !== true,
-  );
-  console.log("[DefaultLayout] 可见菜单列表:", filtered);
-  return filtered;
+  return menuList.filter((item) => item.meta.hidden !== true);
 });
 
-/**
- * 当前登录用户的昵称
- * 从 userStore.userInfo 中获取，用于顶部导航栏右侧展示
- */
+/** 当前登录用户的昵称 */
 const username = computed(() => {
   return userStore.userInfo?.nickname || "未登录";
 });
 
+/** 判断当前路由是否为系统管理下的子页面 */
+const isInSystemPage = computed(() => {
+  return router.currentRoute.value.path.startsWith("/system");
+});
+
 /* ==================== 方法定义 ==================== */
 
-/**
- * 处理菜单项点击事件
- * 使用 router.push 进行编程式导航到目标路由路径
- *
- * @param path - 目标路由路径（来自 MenuListItem.path）
- * @param name - 菜单项名称（用于日志记录）
- */
+/** 菜单点击 */
 const handleMenuClick = (path: string, name: string) => {
   console.log(`[DefaultLayout] 菜单点击: ${name} -> ${path}`);
   router.push(path);
+  isMobileNavOpen.value = false; /* 移动端点击后关闭导航 */
+};
+
+/** 移动端切换导航显示 */
+const toggleMobileNav = () => {
+  isMobileNavOpen.value = !isMobileNavOpen.value;
 };
 
 /**
- * 切换侧边栏折叠/展开状态
- * 折叠时宽度收缩为 64px，展开时恢复为 220px
+ * 退出登录
+ * 二次确认后清除用户状态并跳转到登录页
  */
-const toggleCollapse = () => {
-  isCollapse.value = !isCollapse.value;
-  console.log(
-    `[DefaultLayout] 侧边栏${isCollapse.value ? "已折叠" : "已展开"}`,
-  );
-};
+async function handleLogout(): Promise<void> {
+  try {
+    await ElMessageBox.confirm(
+      "确定要退出登录吗？",
+      "退出确认",
+      { confirmButtonText: "确定退出", cancelButtonText: "取消", type: "warning" },
+    );
+
+    /* 调用 userStore 的 logout 方法清除 Token 和用户状态 */
+    userStore.logout();
+
+    ElMessage.success("已退出登录");
+
+    /* 跳转到登录页（不携带 redirect 参数，因为已要求统一跳转仪表盘）*/
+    router.push("/login");
+  } catch (error: unknown) {
+    if ((error as Error)?.message !== "cancel") {
+      console.error("[DefaultLayout] 退出失败:", error);
+    }
+    /* 用户点击"取消"时不做任何操作 */
+  }
+}
 </script>
 
 <template>
-  <!--
-    Element Plus Container 布局根容器
-    el-container 是外层容器，当子元素中含有 el-header 或 el-footer 时，
-    全部子元素会垂直上下排列，否则会水平左右排列
-  -->
   <el-container class="wf-default-layout">
 
     <!-- ==================== 顶部导航栏区域 ==================== -->
-    <!--
-      el-header 顶栏容器
-      固定高度 60px，包含左侧 Logo 区域和右侧用户信息区域
-    -->
     <el-header class="wf-default-layout__header">
-      <!-- 左侧：Logo + 系统名称 + 折叠按钮 -->
+      <!-- 左侧：Logo + 移动端汉堡按钮 -->
       <div class="wf-default-layout__header-left">
-        <!-- 系统 Logo 文字标识 -->
         <h1 class="wf-default-layout__logo">WF Platform</h1>
 
-        <!--
-          侧边栏折叠/展开切换按钮
-          点击后触发 toggleCollapse 方法切换 isCollapse 状态
-        -->
+        <!-- 移动端汉堡菜单按钮（仅小屏显示） -->
         <button
-          class="wf-default-layout__collapse-btn"
-          :title="isCollapse ? '展开菜单' : '折叠菜单'"
-          @click="toggleCollapse"
+          class="wf-default-layout__mobile-toggle"
+          :class="{ 'wf-default-layout__mobile-toggle--active': isMobileNavOpen }"
+          @click="toggleMobileNav"
         >
-          {{ isCollapse ? "☰" : "✕" }}
+          <span></span>
+          <span></span>
+          <span></span>
         </button>
       </div>
 
-      <!-- 右侧：用户信息操作区 -->
+      <!-- 右侧：用户信息 + 退出按钮 -->
       <div class="wf-default-layout__header-right">
-        <!-- 当前登录用户昵称展示 -->
         <span class="wf-default-layout__username">{{ username }}</span>
+        <button
+          class="wf-default-layout__logout-btn"
+          type="button"
+          @click="handleLogout"
+        >
+          退出
+        </button>
       </div>
     </el-header>
 
     <!-- ==================== 主体区域（侧边栏 + 主内容） ==================== -->
     <el-container class="wf-default-layout__body">
 
-      <!-- ==================== 左侧边栏导航区域 ==================== -->
-      <!--
-        el-aside 侧边栏容器
-        宽度根据折叠状态动态变化：
-          - 展开状态：220px
-          - 折叠状态：64px（Element Plus el-menu 折叠默认宽度）
-        深色背景主题（#001529），与经典后台管理系统风格一致
-      -->
+      <!-- ==================== 左侧边栏（大屏） / 顶部横条导航（小屏） ==================== -->
       <el-aside
-        :width="isCollapse ? '64px' : '220px'"
+        width="180px"
         class="wf-default-layout__aside"
+        :class="{ 'wf-default-layout__aside--hidden': isMobileNavOpen === false }"
       >
-        <!--
-          el-menu 导航菜单组件
-          配置说明：
-            - collapse: 是否折叠模式（影响图标/文字显示方式）
-            - router: 启用 vue-router 模式，点击菜单项会自动调用 router.push
-            - default-active: 当前激活菜单的 index，用于高亮显示
-            - background-color: 菜单背景色（深色主题）
-            - text-color: 菜单文字颜色（白色）
-            - active-text-color: 激活菜单文字颜色（品牌蓝色）
-            - unique-opened: 同时只展开一个子菜单
-        -->
         <el-menu
-          :collapse="isCollapse"
+          :collapse="false"
           router
           :default-active="activeMenu"
           background-color="#001529"
@@ -182,30 +160,17 @@ const toggleCollapse = () => {
           :unique-opened="true"
           class="wf-default-layout__menu"
         >
-          <!--
-            遍历可见菜单列表，逐个渲染菜单项
-            使用动态组件 :is 判断当前项是否有子菜单：
-              - 有 children 且长度 > 0 → 渲染 WfSubMenu（可展开的子菜单组）
-              - 无 children 或为空数组 → 渲染 WfMenuItem（叶子节点菜单项）
-          -->
           <template v-for="menuItem in visibleMenuList" :key="menuItem.path">
-            <!-- 有子菜单的情况：使用 el-sub-menu 包裹 -->
+            <!-- 有子菜单 → sub-menu -->
             <el-sub-menu
               v-if="menuItem.children && menuItem.children.length > 0"
               :index="menuItem.path"
             >
-              <!-- 子菜单标题插槽：显示父级菜单的标题和图标 -->
               <template #title>
                 <span>{{ menuItem.meta.title }}</span>
               </template>
-
-              <!--
-                递归渲染子菜单项
-                通过作用域插槽传递子菜单数据，内部再次判断是否有嵌套子菜单
-                实现无限层级菜单的递归渲染能力
-              -->
               <template v-for="child in menuItem.children" :key="child.path">
-                <!-- 三级及以上菜单：继续使用 sub-menu 包裹 -->
+                <!-- 三级及以上 -->
                 <el-sub-menu
                   v-if="child.children && child.children.length > 0"
                   :index="child.path"
@@ -213,7 +178,6 @@ const toggleCollapse = () => {
                   <template #title>
                     <span>{{ child.meta.title }}</span>
                   </template>
-                  <!-- 递归渲染三级子菜单的叶子节点 -->
                   <el-menu-item
                     v-for="grandChild in child.children"
                     :key="grandChild.path"
@@ -224,7 +188,7 @@ const toggleCollapse = () => {
                   </el-menu-item>
                 </el-sub-menu>
 
-                <!-- 二级叶子菜单：直接渲染 menu-item -->
+                <!-- 二级叶子 -->
                 <el-menu-item
                   v-else
                   :index="child.path"
@@ -235,7 +199,7 @@ const toggleCollapse = () => {
               </template>
             </el-sub-menu>
 
-            <!-- 无子菜单的情况：直接渲染叶子菜单项 -->
+            <!-- 无子菜单 → 直接渲染 -->
             <el-menu-item
               v-else
               :index="menuItem.path"
@@ -247,23 +211,15 @@ const toggleCollapse = () => {
         </el-menu>
       </el-aside>
 
-      <!-- ==================== 主内容区域 ==================== -->
-      <!--
-        el-main 主要内容区容器
-        自动占满 aside 之外的所有剩余空间
-        内部放置 <router-view /> 作为路由出口，渲染当前 URL 匹配的页面组件
-      -->
-      <el-main class="wf-default-layout__main">
-        <!--
-          Vue Router 路由视图出口
-          当 URL 变化时，Vue Router 会自动在此处渲染对应路由配置中的 component 组件
+      <!-- ==================== 移动端遮罩层（点击关闭导航） ==================== -->
+      <div
+        v-if="isMobileNavOpen"
+        class="wf-default-layout__overlay"
+        @click="isMobileNavOpen = false"
+      />
 
-          工作流程示例：
-            1. 用户点击菜单项 "系统管理" -> path="/system"
-            2. Vue Router 匹配 /system 路由规则
-            3. 将 SystemManage 组件渲染到此处
-            4. 页面内容即时更新，无需刷新浏览器
-        -->
+      <!-- ==================== 主内容区域 ==================== -->
+      <el-main class="wf-default-layout__main">
         <router-view />
       </el-main>
     </el-container>
@@ -273,11 +229,6 @@ const toggleCollapse = () => {
 <style scoped>
 /* ==================== 布局根容器样式 ==================== */
 
-/**
- * DefaultLayout 根容器
- * 使用 Element Plus el-container 作为最外层布局容器
- * 设置全屏高度，确保布局铺满整个浏览器视口
- */
 .wf-default-layout {
   width: 100%;
   height: 100vh;
@@ -285,11 +236,6 @@ const toggleCollapse = () => {
 
 /* ==================== 顶部导航栏样式 ==================== */
 
-/**
- * 顶部导航栏
- * 采用 Flexbox 水平布局，左右两端对齐
- * 高度由 el-container 内置样式控制（默认 60px）
- */
 .wf-default-layout__header {
   display: flex;
   align-items: center;
@@ -299,16 +245,15 @@ const toggleCollapse = () => {
   border-bottom: 1px solid #e8e8e8;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
   z-index: 100;
+  position: relative;
 }
 
-/** 顶部左侧区域：Logo + 折叠按钮 */
 .wf-default-layout__header-left {
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
-/** 系统 Logo 文字样式 */
 .wf-default-layout__logo {
   margin: 0;
   font-size: 18px;
@@ -318,98 +263,203 @@ const toggleCollapse = () => {
   white-space: nowrap;
 }
 
-/** 侧边栏折叠/展开按钮 */
-.wf-default-layout__collapse-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
+/* 移动端汉堡菜单按钮（默认隐藏，≤1024px 显示）*/
+.wf-default-layout__mobile-toggle {
+  display: none;
+  flex-direction: column;
+  justify-content: space-around;
+  width: 28px;
+  height: 22px;
   padding: 0;
   border: none;
-  border-radius: 4px;
   background-color: transparent;
-  color: #666;
-  font-size: 16px;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
-/** 折叠按钮悬停效果 */
-.wf-default-layout__collapse-btn:hover {
-  background-color: #f0f0f0;
-  color: #1890ff;
+.wf-default-layout__mobile-toggle span {
+  display: block;
+  width: 100%;
+  height: 2.5px;
+  background-color: #333;
+  border-radius: 2px;
+  transition: all 0.3s ease;
+  transform-origin: center;
 }
 
-/** 顶部右侧区域：用户信息等操作 */
+/* 汉堡变 X 动画 */
+.wf-default-layout__mobile-toggle--active span:nth-child(1) {
+  transform: translateY(9.5px) rotate(45deg);
+}
+.wf-default-layout__mobile-toggle--active span:nth-child(2) {
+  opacity: 0;
+  transform: scaleX(0);
+}
+.wf-default-layout__mobile-toggle--active span:nth-child(3) {
+  transform: translateY(-9.5px) rotate(-45deg);
+}
+
 .wf-default-layout__header-right {
   display: flex;
   align-items: center;
   gap: 16px;
 }
 
-/** 用户昵称文本 */
 .wf-default-layout__username {
   font-size: 14px;
   color: #333;
 }
 
+/** 退出登录按钮 */
+.wf-default-layout__logout-btn {
+  padding: 5px 14px;
+  font-size: 13px;
+  color: #666;
+  background-color: transparent;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.wf-default-layout__logout-btn:hover {
+  color: #f56c6c;
+  border-color: #f56c6c;
+  background-color: #fef0f0;
+}
+
+.wf-default-layout__logout-btn:active {
+  transform: scale(0.97);
+}
+
 /* ==================== 主体区域样式 ==================== */
 
-/** 主体容器：包裹侧边栏和主内容区 */
 .wf-default-layout__body {
   overflow: hidden;
 }
 
 /* ==================== 侧边栏样式 ==================== */
 
-/**
- * 左侧边栏
- * 深色背景主题，与 Element Plus el-menu 的暗色模式配合使用
- * 过渡动画确保折叠/展开时宽度平滑变化
- */
 .wf-default-layout__aside {
   background-color: #001529;
-  transition: width 0.3s ease;
   overflow-x: hidden;
   overflow-y: auto;
+  /* 大屏固定宽度，不折叠 */
+  width: 180px !important;
+  min-width: 180px !important;
+  max-width: 180px !important;
+  transition: transform 0.3s ease, opacity 0.3s ease;
 }
 
-/**
- * 自定义侧边栏滚动条样式
- * 使滚动条更细、更美观，符合深色背景主题
- */
 .wf-default-layout__aside::-webkit-scrollbar {
   width: 4px;
 }
-
 .wf-default-layout__aside::-webkit-scrollbar-thumb {
   background-color: #ffffff33;
   border-radius: 2px;
 }
-
 .wf-default-layout__aside::-webkit-scrollbar-track {
   background-color: transparent;
 }
 
-/**
- * 导航菜单组件样式覆盖
- * 取消 el-menu 默认的右边框，使侧边栏视觉更整洁统一
- */
 .wf-default-layout__menu {
   border-right: none;
 }
 
+/* ==================== 遮罩层（移动端侧边栏打开时显示） ==================== */
+
+.wf-default-layout__overlay {
+  display: none;
+}
+
 /* ==================== 主内容区域样式 ==================== */
 
-/**
- * 主内容区域
- * 占据侧边栏右侧的所有剩余空间
- * 浅灰色背景与白色内容卡片形成层次对比
- */
 .wf-default-layout__main {
   background-color: #f5f7fa;
   overflow-y: auto;
   padding: 16px;
+}
+
+/* ============================================================
+ * 响应式断点：< 1024px — 移动端/平板竖屏
+ * ============================================================ */
+@media screen and (max-width: 1023px) {
+
+  /* ---- 顶部导航栏 ---- */
+  .wf-default-layout__header {
+    padding: 0 12px;
+  }
+
+  .wf-default-layout__logo {
+    font-size: 15px;
+  }
+
+  /* 显示汉堡按钮 */
+  .wf-default-layout__mobile-toggle {
+    display: flex;
+  }
+
+  .wf-default-layout__username {
+    font-size: 13px;
+  }
+
+  .wf-default-layout__logout-btn {
+    padding: 4px 10px;
+    font-size: 12px;
+  }
+
+  /* ---- 侧边栏变为滑出式抽屉 ---- */
+  .wf-default-layout__aside {
+    position: fixed;
+    top: 60px; /* header 高度 */
+    left: 0;
+    bottom: 0;
+    z-index: 200;
+    width: 200px !important;
+    min-width: 200px !important;
+    max-width: 200px !important;
+    transform: translateX(-100%); /* 默认滑出屏幕左侧 */
+    box-shadow: 4px 0 16px rgba(0, 0, 0, 0.2);
+  }
+
+  /* 打开时滑入 */
+  .wf-default-layout__aside:not(.wf-default-layout__aside--hidden) {
+    transform: translateX(0);
+  }
+
+  /* 显示遮罩 */
+  .wf-default-layout__overlay {
+    display: block;
+    position: fixed;
+    top: 60px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.35);
+    z-index: 150;
+  }
+
+  /* ---- 主内容区占满宽度 ---- */
+  .wf-default-layout__main {
+    padding: 12px;
+  }
+}
+
+/* ============================================================
+ * 超小屏：< 640px — 手机竖屏
+ * ============================================================ */
+@media screen and (max-width: 639px) {
+  .wf-default-layout__header {
+    padding: 0 10px;
+  }
+
+  .wf-default-layout__logo {
+    font-size: 14px;
+  }
+
+  .wf-default-layout__main {
+    padding: 8px;
+  }
 }
 </style>

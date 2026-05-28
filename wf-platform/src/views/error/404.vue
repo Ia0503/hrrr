@@ -149,4 +149,28 @@ const goBack = (): void => {
   background-color: #f9fafb;
   border-color: #9ca3af;
 }
+
+/* ==================== 响应式设计 ==================== */
+
+@media screen and (max-width: 639px) {
+  .wf-error-404__code {
+    font-size: 80px;
+    letter-spacing: 4px;
+    margin-bottom: 12px;
+  }
+
+  .wf-error-404__title {
+    font-size: 20px;
+  }
+
+  .wf-error-404__desc {
+    font-size: 13px;
+    margin-bottom: 24px;
+  }
+
+  .wf-error-404__btn {
+    padding: 8px 20px;
+    font-size: 13px;
+  }
+}
 </style>

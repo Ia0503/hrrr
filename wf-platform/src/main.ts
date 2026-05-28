@@ -47,11 +47,13 @@ app.use(router);
  * 全量注册所有组件和图标，开发阶段优先保证可用性
  * 生产环境可按需引入以减小包体积（使用 unplugin-vue-components + unplugin-auto-import）
  */
+import zhCn from "element-plus/es/locale/lang/zh-cn"; /** 中文简体语言包 */
+
 app.use(ElementPlus, {
   /** 设置 Element Plus 组件的默认尺寸 */
   size: "default",
-  /** 设置 Element Plus 的语言为中文简体 */
-  locale: undefined, // ⚠️ 如需完整中文国际化，需安装 element-plus/es/locale/lang/zh-cn
+  /** 设置 Element Plus 的语言为中文简体（表单验证提示、日期选择器等全部中文化）*/
+  locale: zhCn,
 });
 
 /** 批量注册 Element Plus 图标组件（全局可用） */
