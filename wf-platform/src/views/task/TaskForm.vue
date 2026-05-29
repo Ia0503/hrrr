@@ -14,8 +14,8 @@ import { ElMessage } from "element-plus";
 import request from "@/utils/request";
 
 import type { TaskItem } from "@/stores/task";
-import type { SchemaFormItem } from "@/components/SchemaForm/types";
-import { ComponentType, SchemaNodeType, ContainerType } from "@/components/SchemaForm/types";
+import type { SchemaFormItem } from "@/composables/useSchemaForm";
+import { ComponentType, SchemaNodeType, ContainerType } from "@/composables/useSchemaForm";
 import { useSchemaForm } from "@/composables/useSchemaForm";
 import SchemaForm from "@/components/SchemaForm/SchemaForm.vue";
 

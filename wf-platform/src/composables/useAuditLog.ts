@@ -251,7 +251,6 @@ export function useAuditLog() {
             ? navigator.userAgent || ""
             : "",
         status: logData.status ?? "success",
-        duration: logData.duration,
         createTime: new Date().toISOString(),
       };
 

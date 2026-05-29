@@ -61,7 +61,6 @@ export enum AuditAction {
  * @property ip - 客户端 IP 地址（Mock 阶段固定值）
  * @property userAgent - 浏览器 User-Agent 字符串
  * @property status - 操作结果状态
- * @property duration - 请求耗时（毫秒），可选
  * @property createTime - 日志生成时间（ISO 8601 格式）
  */
 export interface AuditLog {
@@ -76,7 +75,6 @@ export interface AuditLog {
   ip: string;
   userAgent: string;
   status: "success" | "fail";
-  duration?: number;
   createTime: string;
 }
 

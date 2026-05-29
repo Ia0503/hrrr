@@ -183,15 +183,6 @@
           </template>
         </el-table-column>
 
-        <!-- 耗时列 -->
-        <el-table-column
-          prop="duration"
-          label="耗时(ms)"
-          width="90"
-          align="center"
-          sortable
-        />
-
         <!-- 状态列 -->
         <el-table-column
           prop="status"
