@@ -553,10 +553,14 @@ export const useTaskStore = defineStore("task", () => {
     manager.off(SocketEvent.TASK_DELETED);
     manager.off(SocketEvent.TASK_CREATED);
 
+    /* 断开底层 WebSocket 连接，释放 socket.io client 实例、内部定时器和内存
+     * 防止离开页面后心跳包持续发送造成资源泄漏 */
+    manager.disconnect();
+
     /* 重置初始化标志，允许后续重新调用 initSocketListeners */
     wsListenersInitialized.value = false;
 
-    console.log("[task-store] [INFO] WebSocket 监听器已清理");
+    console.log("[task-store] [INFO] WebSocket 监听器已清理，连接已断开");
   }
 
   /* ---------- 返回值：暴露给组件使用的状态与方法 ---------- */
