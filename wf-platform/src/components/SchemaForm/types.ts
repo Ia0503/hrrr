@@ -55,6 +55,65 @@ export enum ComponentType {
 }
 
 // ============================================================
+// A2. SchemaNodeType 枚举 - Schema 节点类型（区分叶子字段与容器）
+// ============================================================
+
+/** Schema 节点类型枚举，用于区分 schema 数组中的元素是可输入的叶子字段还是包裹子字段的容器节点 */
+export enum SchemaNodeType {
+  /** 叶子字段：对应一个具体的表单控件（input/select/radio 等），拥有 field/component 等属性 */
+  FIELD = "field",
+  /** 容器节点：用于逻辑分组或 UI 包裹，自身不渲染控件，通过 children 持有子字段集合 */
+  CONTAINER = "container",
+}
+
+// ============================================================
+// A3. ContainerType 枚举 - 容器节点的 UI 渲染类型
+// ============================================================
+
+/**
+ * 容器节点渲染类型枚举
+ * 决定容器节点在页面上的视觉呈现形式，每种类型对应不同的 HTML 结构和 Element Plus 组件
+ */
+export enum ContainerType {
+  /**
+   * 逻辑分组（无特殊 UI 包裹）
+   * 子字段直接平铺渲染，仅作为 schema 层级的逻辑分组存在
+   * 适用于不需要额外视觉边框的场景，如将相关字段简单归类
+   */
+  GROUP = "group",
+
+  /**
+   * 字段集（原生 <fieldset> + <legend>）
+   * 使用 HTML 原生 fieldset 元素包裹，带 legend 标题
+   * 语义化良好，适合"地址信息"、"联系方式"等语义明确的分组
+   */
+  FIELDSET = "fieldset",
+
+  /**
+   * 卡片面板（el-card）
+   * 使用 Element Plus 的 Card 组件包裹，带标题头和阴影/边框
+   * 适合"高级选项"、"配置详情"等需要视觉隔离的区块
+   */
+  CARD = "card",
+
+  /**
+   * 标签页分组（el-tabs + el-tab-pane）
+   * 将子字段按 tab 分页展示，每个 children 元素作为一个 tab-pane
+   * 适用于字段过多需要分页组织，或存在互斥信息组的场景
+   *
+   * ⚠️ 特殊约定：children 中每个元素的 label 作为 tab 标题，其 ownChildren（如有）为该 tab 下的实际字段
+   */
+  TABS = "tabs",
+
+  /**
+   * 栅格布局容器（el-row + el-col）
+   * 使用 Element Plus 栅格系统对子字段进行行列排布
+   * 通过 span 属性控制每行列数，适用于需要精确控制布局的复杂表单
+   */
+  GRID = "grid",
+}
+
+// ============================================================
 // B. LinkageActionType 枚举 - 联动动作类型
 // ============================================================
 
@@ -326,6 +385,55 @@ export interface SchemaFormItem {
   description?: string;
 
   // ---------- 高级配置 ----------
+
+  /**
+   * 节点类型（区分叶子字段与容器节点）
+   *
+   * - **"field"** (默认)：叶子节点，对应一个具体的表单控件，必须设置 field/component
+   * - **"container"**：容器节点，用于逻辑分组或 UI 包裹，通过 children 持有子字段
+   *
+   * 不设置时默认为 "field"，保证与现有扁平 schema 完全向后兼容
+   * @example type: SchemaNodeType.CONTAINER
+   */
+  type?: SchemaNodeType | string;
+
+  /**
+   * 容器渲染类型（仅当 type === "container" 时生效）
+   * 决定容器节点在页面上的视觉呈现形式：
+   * - GROUP      → 无包裹，子字段平铺
+   * - FIELDSET   → <fieldset><legend> 语义化分组
+   * - CARD       → el-card 卡片面板
+   * - TABS       → el-tabs 标签页分页
+   * - GRID       → el-row/el-col 栅格布局
+   *
+   * 默认值：GROUP（最轻量，无额外 DOM 包裹）
+   * @example containerType: ContainerType.CARD
+   */
+  containerType?: ContainerType | string;
+
+  /**
+   * 子节点数组（仅当 type === "container" 时有效）
+   * 容器节点持有的子字段集合，每个元素可以是叶子字段或另一个容器节点
+   * 支持任意深度的递归嵌套，形成 schema 树形结构
+   *
+   * 叶子字段的 field 支持路径写法（如 "address.city"），
+   * 引擎会自动将路径映射到 formModel 的嵌套对象结构
+   *
+   * @example
+   * ```typescript
+   * {
+   *   type: SchemaNodeType.CONTAINER,
+   *   containerType: ContainerType.CARD,
+   *   label: "地址信息",
+   *   children: [
+   *     { field: "address.province", label: "省份", component: ComponentType.SELECT },
+   *     { field: "address.city", label: "城市", component: ComponentType.SELECT },
+   *     { field: "address.detail", label: "详细地址", component: ComponentType.TEXTAREA },
+   *   ],
+   * }
+   * ```
+   */
+  children?: SchemaFormItem[];
 
   /**
    * 自定义 CSS 类名

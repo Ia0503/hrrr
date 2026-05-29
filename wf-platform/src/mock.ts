@@ -72,6 +72,11 @@ interface SessionInfo {
 
 /**
  * 任务接口定义（统一存储格式）
+ *
+ * 【嵌套支持说明】
+ * v2 新增 requirement/bugInfo/debt/doc 四个可选嵌套对象，
+ * 对应 SchemaForm 引擎的路径式 field（如 "bugInfo.severity"）。
+ * 这些字段在 taskType 匹配时由前端表单提交，Mock 层透传存储和返回。
  */
 interface StoredTask {
   id: number | string;
@@ -93,6 +98,48 @@ interface StoredTask {
   complexity?: number;
   /** 是否加急标记 */
   isUrgent?: boolean;
+
+  /* ========== 嵌套字段区域（v2 新增）========== */
+
+  /** 需求规格信息（taskType="feature" 时使用） */
+  requirement?: {
+    source: string;           // 需求来源：内部需求/客户反馈/竞品分析
+    userStory: string;        // 用户故事
+    acceptanceCriteria: string; // 验收标准
+    scope: string;            // 影响范围：全平台/仅Web端/仅API
+  };
+
+  /** Bug 详情信息（taskType="bug" 时使用） */
+  bugInfo?: {
+    severity: string;         // 严重程度：critical/major/minor/trivial
+    frequency: string;        // 复现频率：occasional/often/always
+    environment: string;      // 环境信息
+    steps: string;            // 复现步骤
+  };
+
+  /** 技术债务评估（taskType="tech_debt" 时使用） */
+  debt?: {
+    category: string;         // 债务类别：代码坏味道/性能瓶颈/安全漏洞/技术过时
+    introducedVersion: string;// 引入版本号
+    affectedModules: string[];// 影响模块列表
+    payoffDays: number;       // 预估还清周期（天）
+  };
+
+  /** 文档配置信息（taskType="doc" 时使用） */
+  doc?: {
+    docType: string;          // 文档类型：API文档/使用手册/技术方案/发布说明
+    targetAudience: string[]; // 目标读者
+    wordCountTarget: number;  // 字数目标
+    publishChannel: string;   // 发布渠道：内部Wiki/GitHub Pages/官网
+  };
+
+  /** 改进方案信息（taskType="improvement" 时使用） */
+  improvement?: {
+    category: string;         // 改进方向：performance/ux/code_quality/security/process
+    currentPain: string;      // 现状痛点描述
+    expectedGain: string;     // 预期收益描述
+    impactScope: string[];    // 影响范围列表
+  };
 }
 
 // ==================== 存储单例初始化 ====================
@@ -201,6 +248,12 @@ function initPresetTasks(): StoredTask[] {
       dueDate: "2026-06-15",
       estimatedHours: 16,
       complexity: 4,
+      requirement: {
+        source: "客户反馈",
+        userStory: "作为系统管理员，我希望登录页面支持验证码和记住密码功能，以便提升安全性和使用便利性",
+        acceptanceCriteria: "1. 登录失败3次后显示图形验证码 2. 勾选记住密码后7天内免登录 3. 支持微信扫码登录",
+        scope: "全平台",
+      },
     },
     {
       id: 1002,
@@ -216,6 +269,12 @@ function initPresetTasks(): StoredTask[] {
       dueDate: "2026-06-20",
       estimatedHours: 8,
       complexity: 3,
+      improvement: {
+        category: "performance",
+        currentPain: "首页加载时间超过 3 秒，用户流失率较高",
+        expectedGain: "首屏渲染时间降低至 1.5 秒以内，提升用户留存",
+        impactScope: ["前端", "后端", "数据库"],
+      },
     },
     {
       id: 1003,
@@ -231,6 +290,30 @@ function initPresetTasks(): StoredTask[] {
       dueDate: "2026-06-30",
       estimatedHours: 24,
       complexity: 5,
+    },
+
+    /* ---------- Bug 类型示例（含嵌套 bugInfo） ---------- */
+    {
+      id: 1004,
+      title: "登录页样式在缩放时错乱",
+      description: "浏览器窗口缩放到 50% 时，标签文字与输入框重叠",
+      status: "todo",
+      priority: "urgent",
+      assignee: assigneePool[Random.integer(0, assigneePool.length - 1)],
+      tags: ["前端开发", "CSS"],
+      createdAt: Random.datetime("yyyy-MM-dd HH:mm:ss"),
+      orderIndex: 3,
+      taskType: "bug",
+      dueDate: "2026-05-30",
+      estimatedHours: 3,
+      complexity: 2,
+      isUrgent: true,
+      bugInfo: {
+        severity: "major",
+        frequency: "always",
+        environment: "Chrome 120 / Windows 11, Firefox 120 / macOS",
+        steps: "1. 打开登录页面 2. 按 Ctrl+减号将缩放调至 50% 3. 观察到 el-form-item label 与 input 框文字重叠",
+      },
     },
 
     /* ---------- 进行中列 (doing) ---------- */
@@ -249,6 +332,12 @@ function initPresetTasks(): StoredTask[] {
       estimatedHours: 40,
       complexity: 5,
       isUrgent: true,
+      requirement: {
+        source: "内部需求",
+        userStory: "作为系统管理员，我希望能够通过角色和权限矩阵控制各功能模块的访问，以便实现最小权限原则",
+        acceptanceCriteria: "1. 支持角色CRUD 2. 支持权限点分配 3. 菜单根据权限动态渲染 4. API接口级鉴权",
+        scope: "全平台",
+      },
     },
     {
       id: 2002,
@@ -280,6 +369,12 @@ function initPresetTasks(): StoredTask[] {
       taskType: "tech_debt",
       estimatedHours: 4,
       complexity: 2,
+      debt: {
+        category: "技术过时",
+        introducedVersion: "v0.1.0",
+        affectedModules: ["工程化", "构建配置"],
+        payoffDays: 3,
+      },
     },
     {
       id: 3002,
@@ -858,6 +953,12 @@ export default [
         estimatedHours: data.estimatedHours as number | undefined,
         complexity: data.complexity as number | undefined,
         isUrgent: data.isUrgent as boolean | undefined,
+
+        /* 嵌套字段：透传存储（前端 SchemaForm 路径式 field 提交的嵌套对象）*/
+        requirement: data.requirement as StoredTask["requirement"] | undefined,
+        bugInfo: data.bugInfo as StoredTask["bugInfo"] | undefined,
+        debt: data.debt as StoredTask["debt"] | undefined,
+        doc: data.doc as StoredTask["doc"] | undefined,
       };
 
       /* 写入统一存储（与拖拽更新共享同一数据源）*/
@@ -965,7 +1066,7 @@ export default [
         }
       }
 
-      /* 支持其他字段的增量更新 */
+      /* 支持其他字段的增量更新（含嵌套对象整体替换）*/
       if (body?.title !== undefined) taskStore[taskIndex].title = String(body.title);
       if (body?.priority !== undefined) taskStore[taskIndex].priority = String(body.priority);
       if (body?.assignee !== undefined) taskStore[taskIndex].assignee = body.assignee as string | undefined;
@@ -976,6 +1077,12 @@ export default [
       if (body?.estimatedHours !== undefined) taskStore[taskIndex].estimatedHours = body.estimatedHours as number | undefined;
       if (body?.complexity !== undefined) taskStore[taskIndex].complexity = body.complexity as number | undefined;
       if (body?.isUrgent !== undefined) taskStore[taskIndex].isUrgent = body.isUrgent as boolean | undefined;
+
+      /* 嵌套对象整体替换更新 */
+      if (body?.requirement !== undefined) taskStore[taskIndex].requirement = body.requirement as StoredTask["requirement"] | undefined;
+      if (body?.bugInfo !== undefined) taskStore[taskIndex].bugInfo = body.bugInfo as StoredTask["bugInfo"] | undefined;
+      if (body?.debt !== undefined) taskStore[taskIndex].debt = body.debt as StoredTask["debt"] | undefined;
+      if (body?.doc !== undefined) taskStore[taskIndex].doc = body.doc as StoredTask["doc"] | undefined;
 
       const finalStatus = taskStore[taskIndex].status;
       console.log(

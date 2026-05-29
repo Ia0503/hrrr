@@ -300,8 +300,9 @@ function formatEstimatedHours(hours: number | undefined): string {
  * 新建任务弹窗
  * ============================================================ */
 
-/** 打开新建任务弹窗 */
+/** 打开新建任务弹窗（确保清除残留的编辑数据，避免复用上次编辑的任务信息） */
 function openCreateDialog(): void {
+  editingTaskData.value = undefined;
   showTaskFormDialog.value = true;
 }
 
