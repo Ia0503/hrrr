@@ -2,7 +2,7 @@
   <el-form
     ref="formRef"
     :model="formModel"
-    :rules="computedRules"
+    :rules="effectiveRules"
     :label-width="labelWidth"
     :size="size"
     :label-position="labelPosition"
@@ -27,6 +27,7 @@ import type {
   SchemaFormProps,
   SchemaFormEmits,
 } from "./types";
+import { SchemaNodeType } from "./types";
 import SchemaFormItemRenderer from "./SchemaFormItemRenderer.vue";
 
 defineOptions({
@@ -74,10 +75,10 @@ const visibleSchemas = computed((): SchemaFormItem[] => {
   const vf = (rawVf && 'value' in rawVf) ? rawVf.value : rawVf;
 
   return source.filter((item) => {
+    /* 容器节点判断：仅以 type 字段为准（问题七修复：去掉 children 兜底条件） */
     const isContainerNode =
-      item.type === "container" ||
-      item.type === "container" ||
-      (item.children !== undefined && item.children !== null && item.children.length > 0);
+      item.type === SchemaNodeType.CONTAINER ||
+      item.type === "container";
 
     /* 容器节点：通过 field 属性查 visibleFields 字典，支持联动显隐 */
     if (isContainerNode) {
@@ -102,10 +103,10 @@ const computedRules = computed(() => {
 
   function collectRules(items: SchemaFormItem[]): void {
     for (const item of items) {
+      /* 容器节点判断：仅以 type 字段为准（问题七修复） */
       if (
-        item.type === "container" ||
-        item.type === "container" ||
-        (item.children && item.children.length > 0)
+        item.type === SchemaNodeType.CONTAINER ||
+        item.type === "container"
       ) {
         if (item.children && item.children.length > 0) {
           collectRules(item.children);
@@ -121,6 +122,24 @@ const computedRules = computed(() => {
 
   collectRules(source);
   return rules;
+});
+
+/**
+ * el-form 实际使用的校验规则（问题三修复）
+ *
+ * 优先级：
+ *   1. props.formRules — useSchemaForm 返回的动态规则（含联动 REQUIRED 增删）
+ *   2. computedRules   — 组件内部从 schema 静态推导的兜底规则
+ *
+ * 传入 formRules 后，联动 REQUIRED 动作的动态增删才能被 el-form 感知
+ */
+const effectiveRules = computed(() => {
+  if (props.formRules) {
+    /* Ref 兼容取值 */
+    const rawFr = props.formRules as any;
+    return (rawFr && 'value' in rawFr) ? rawFr.value : rawFr;
+  }
+  return computedRules.value;
 });
 
 function onFieldChange(field: string, value: unknown, oldValue: unknown): void {

@@ -66,8 +66,15 @@ async function fetchUserList(): Promise<void> {
     userList.value = res as UserOption[];
     console.log(`[task-form] [INFO] 负责人列表加载完成，共 ${userList.value.length} 个用户`);
 
-    /** 同步更新 schema 中负责人选项 */
-    const assigneeField = taskFormSchema.find((f) => f.field === "assignee");
+    /**
+     * 同步更新 schema 中负责人选项
+     *
+     * 【问题六修复】必须从 formSchemas（useSchemaForm 内部的工作副本）中查找并更新，
+     * 而非从 taskFormSchema（原始静态数组）更新。
+     * 原因：useSchemaForm 在初始化时对 schema 做了深拷贝，
+     * 修改原数组不会同步到内部副本，导致渲染时读取的仍是空选项
+     */
+    const assigneeField = formSchemas.value.find((f) => f.field === "assignee");
     if (assigneeField) {
       assigneeField.options = userList.value.map((u) => ({
         label: u.nickname,
@@ -130,9 +137,9 @@ const taskFormSchema: SchemaFormItem[] = [
     componentProps: { placeholder: "请选择任务类型", clearable: false },
 
     /* 联动规则：根据类型控制条件容器的显隐
-     * 每种类型显示自己的容器，同时隐藏其余所有容器 */
+     * 每种类型只需一条 show 规则，引擎的回退机制会自动隐藏其余容器 */
     linkageRules: [
-      /* === 功能需求：显示需求规格，隐藏其余3个 === */
+      /* === 功能需求 → 显示需求规格容器 === */
       {
         id: "type-feature-show",
         condition: { watchField: "taskType", condition: "feature" as string },
@@ -140,36 +147,8 @@ const taskFormSchema: SchemaFormItem[] = [
         targetField: "container-requirement",
         actionParams: true,
       },
-      {
-        id: "type-feature-hide-bug",
-        condition: { watchField: "taskType", condition: "feature" as string },
-        action: "VISIBLE" as string,
-        targetField: "container-bugInfo",
-        actionParams: false,
-      },
-      {
-        id: "type-feature-hide-debt",
-        condition: { watchField: "taskType", condition: "feature" as string },
-        action: "VISIBLE" as string,
-        targetField: "container-debt",
-        actionParams: false,
-      },
-      {
-        id: "type-feature-hide-doc",
-        condition: { watchField: "taskType", condition: "feature" as string },
-        action: "VISIBLE" as string,
-        targetField: "container-doc",
-        actionParams: false,
-      },
-      {
-        id: "type-feature-hide-improvement",
-        condition: { watchField: "taskType", condition: "feature" as string },
-        action: "VISIBLE" as string,
-        targetField: "container-improvement",
-        actionParams: false,
-      },
 
-      /* === 缺陷 Bug：显示Bug详情，隐藏其余4个 === */
+      /* === 缺陷 Bug → 显示 Bug 详情容器 === */
       {
         id: "type-bug-show",
         condition: { watchField: "taskType", condition: "bug" as string },
@@ -177,36 +156,8 @@ const taskFormSchema: SchemaFormItem[] = [
         targetField: "container-bugInfo",
         actionParams: true,
       },
-      {
-        id: "type-bug-hide-requirement",
-        condition: { watchField: "taskType", condition: "bug" as string },
-        action: "VISIBLE" as string,
-        targetField: "container-requirement",
-        actionParams: false,
-      },
-      {
-        id: "type-bug-hide-debt",
-        condition: { watchField: "taskType", condition: "bug" as string },
-        action: "VISIBLE" as string,
-        targetField: "container-debt",
-        actionParams: false,
-      },
-      {
-        id: "type-bug-hide-doc",
-        condition: { watchField: "taskType", condition: "bug" as string },
-        action: "VISIBLE" as string,
-        targetField: "container-doc",
-        actionParams: false,
-      },
-      {
-        id: "type-bug-hide-improvement",
-        condition: { watchField: "taskType", condition: "bug" as string },
-        action: "VISIBLE" as string,
-        targetField: "container-improvement",
-        actionParams: false,
-      },
 
-      /* === 技术债务：显示债务评估，隐藏其余4个 === */
+      /* === 技术债务 → 显示债务评估容器 === */
       {
         id: "type-techdebt-show",
         condition: { watchField: "taskType", condition: "tech_debt" as string },
@@ -214,36 +165,8 @@ const taskFormSchema: SchemaFormItem[] = [
         targetField: "container-debt",
         actionParams: true,
       },
-      {
-        id: "type-techdebt-hide-requirement",
-        condition: { watchField: "taskType", condition: "tech_debt" as string },
-        action: "VISIBLE" as string,
-        targetField: "container-requirement",
-        actionParams: false,
-      },
-      {
-        id: "type-techdebt-hide-bug",
-        condition: { watchField: "taskType", condition: "tech_debt" as string },
-        action: "VISIBLE" as string,
-        targetField: "container-bugInfo",
-        actionParams: false,
-      },
-      {
-        id: "type-techdebt-hide-doc",
-        condition: { watchField: "taskType", condition: "tech_debt" as string },
-        action: "VISIBLE" as string,
-        targetField: "container-doc",
-        actionParams: false,
-      },
-      {
-        id: "type-techdebt-hide-improvement",
-        condition: { watchField: "taskType", condition: "tech_debt" as string },
-        action: "VISIBLE" as string,
-        targetField: "container-improvement",
-        actionParams: false,
-      },
 
-      /* === 文档编写：显示文档配置，隐藏其余4个 === */
+      /* === 文档编写 → 显示文档配置容器 === */
       {
         id: "type-doc-show",
         condition: { watchField: "taskType", condition: "doc" as string },
@@ -251,70 +174,14 @@ const taskFormSchema: SchemaFormItem[] = [
         targetField: "container-doc",
         actionParams: true,
       },
-      {
-        id: "type-doc-hide-requirement",
-        condition: { watchField: "taskType", condition: "doc" as string },
-        action: "VISIBLE" as string,
-        targetField: "container-requirement",
-        actionParams: false,
-      },
-      {
-        id: "type-doc-hide-bug",
-        condition: { watchField: "taskType", condition: "doc" as string },
-        action: "VISIBLE" as string,
-        targetField: "container-bugInfo",
-        actionParams: false,
-      },
-      {
-        id: "type-doc-hide-debt",
-        condition: { watchField: "taskType", condition: "doc" as string },
-        action: "VISIBLE" as string,
-        targetField: "container-debt",
-        actionParams: false,
-      },
-      {
-        id: "type-doc-hide-improvement",
-        condition: { watchField: "taskType", condition: "doc" as string },
-        action: "VISIBLE" as string,
-        targetField: "container-improvement",
-        actionParams: false,
-      },
 
-      /* === 优化改进：显示改进方案，隐藏其余4个容器 === */
+      /* === 优化改进 → 显示改进方案容器 === */
       {
         id: "type-improvement-show",
         condition: { watchField: "taskType", condition: "improvement" as string },
         action: "VISIBLE" as string,
         targetField: "container-improvement",
         actionParams: true,
-      },
-      {
-        id: "type-improvement-hide-requirement",
-        condition: { watchField: "taskType", condition: "improvement" as string },
-        action: "VISIBLE" as string,
-        targetField: "container-requirement",
-        actionParams: false,
-      },
-      {
-        id: "type-improvement-hide-bug",
-        condition: { watchField: "taskType", condition: "improvement" as string },
-        action: "VISIBLE" as string,
-        targetField: "container-bugInfo",
-        actionParams: false,
-      },
-      {
-        id: "type-improvement-hide-debt",
-        condition: { watchField: "taskType", condition: "improvement" as string },
-        action: "VISIBLE" as string,
-        targetField: "container-debt",
-        actionParams: false,
-      },
-      {
-        id: "type-improvement-hide-doc",
-        condition: { watchField: "taskType", condition: "improvement" as string },
-        action: "VISIBLE" as string,
-        targetField: "container-doc",
-        actionParams: false,
       },
     ],
   },
@@ -681,6 +548,7 @@ const taskFormSchema: SchemaFormItem[] = [
 const {
   formModel,
   formSchemas,
+  formRules,
   formRef,
   visibleFields,
   validate,
@@ -733,8 +601,7 @@ watch(
           for (const item of items) {
             const isContainer =
               item.type === SchemaNodeType.CONTAINER ||
-              item.type === "container" ||
-              (Array.isArray(item.children) && item.children.length > 0);
+              item.type === "container";
 
             if (isContainer && Array.isArray(item.children)) {
               collectFields(item.children, fields);
@@ -877,6 +744,7 @@ const handleDialogClose = () => {
         :schema="taskFormSchema"
         :reactive-schemas="formSchemas"
         :visible-fields="visibleFields"
+        :form-rules="formRules"
         v-model="formModel"
         label-width="96px"
         size="default"

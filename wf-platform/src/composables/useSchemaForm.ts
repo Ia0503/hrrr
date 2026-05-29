@@ -216,11 +216,10 @@ function traverseLeafFields(
   callback: (item: SchemaFormItem) => void,
 ): void {
   for (const item of items) {
-    /* 判断是否为容器节点：有 children 且非空数组，或显式声明 type="container" */
+    /* 容器节点判断：仅以 type 字段为准，不依赖 children 存在性兜底（问题七修复） */
     const isContainer =
       item.type === SchemaNodeType.CONTAINER ||
-      item.type === "container" ||
-      (Array.isArray(item.children) && item.children.length > 0);
+      item.type === "container";
 
     if (isContainer && Array.isArray(item.children) && item.children.length > 0) {
       /* 容器节点：递归处理子节点 */
@@ -230,6 +229,40 @@ function traverseLeafFields(
       callback(item);
     }
   }
+}
+
+/**
+ * 在 schema 树中按 field 名查找对应的 SchemaFormItem（递归搜索）
+ * 用于联动回退时定位目标字段/容器，修改其 disabled/options 等属性
+ *
+ * @param items - 当前层级的 schema 数组
+ * @param targetField - 要查找的字段名（支持叶子字段和容器节点的 field）
+ * @returns 找到的 schema 项，未找到时返回 undefined
+ */
+function findFieldInSchema(
+  items: SchemaFormItem[],
+  targetField: string,
+): SchemaFormItem | undefined {
+  for (const item of items) {
+    /* 精确匹配 field 名（叶子字段和容器节点都通过 field 定位） */
+    if (item.field === targetField) {
+      return item;
+    }
+
+    /* 容器节点：递归进入子层级查找 */
+    if (
+      (item.type === SchemaNodeType.CONTAINER || item.type === "container") &&
+      Array.isArray(item.children) &&
+      item.children.length > 0
+    ) {
+      const found = findFieldInSchema(item.children, targetField);
+      if (found) {
+        return found;
+      }
+    }
+  }
+
+  return undefined;
 }
 
 /* ============================================================
@@ -258,25 +291,82 @@ export function useSchemaForm(options: UseSchemaFormOptions): UseSchemaFormRetur
     JSON.parse(JSON.stringify(options.schema)),
   );
 
-  /* ---------- 1.5 字段可见性字典（扁平响应式，解决数组内对象深层属性变更不触发更新的问题）----------
+  /* ---------- 1.5 默认状态快照（联动回退基线，必须在 visibleFields 之前初始化）----------
    *
-   * 【为什么需要独立的 visibleFields】
-   * Vue 3 的 Proxy 可以追踪 Ref<SchemaFormItem[]> 数组引用的变化，
-   * 但无法可靠追踪数组内部对象的深层属性（如 item.hidden）的变更。
-   * 即使在联动评估后执行 formSchemas.value = formSchemas.value.map(item => ({...item}))
-   * 创建新引用，某些边界情况下 computed 仍不会重新求值。
+   * 在联动评估前记录每个字段/容器的"出厂状态"，用于条件不满足时自动回退。
+   * 快照内容包括：
+   *   - visibleDefault: 字段/容器初始可见性（来自 schema 的 hidden 属性）
+   *   - disabledDefault: 字段初始禁用状态
+   *   - optionsDefault: 字段初始选项列表（浅拷贝，防止引用污染）
+   *   - rulesDefault: 字段初始校验规则（用于 REQUIRED 回退时重建）
    *
-   * 【解决方案】使用扁平的 Record<string, boolean> 结构：
-   *   key = 字段名（如 "severity"、"address.city"）
-   *   value = 是否可见（true/false）
-   * 这是单层结构，Vue 的 Proxy 可以完美追踪每个属性的赋值操作。
-   * SchemaForm 组件的 visibleSchemas 计算属性基于此字典过滤字段，保证联动显隐 100% 可靠。
+   * 【回退机制】每次 evaluateLinkages() 执行时：
+   *   1. 先将所有被联动控制的字段重置为快照中的默认值
+   *   2. 再对条件满足的规则执行动作（覆盖默认值）
+   *   这样每轮评估都是幂等的，不依赖"对端规则反向操作"
    */
+  const defaultState = {
+    /** 字段/容器 → 初始可见性（true=可见, false=隐藏） */
+    visibleDefault: {} as Record<string, boolean>,
+    /** 字段 → 初始禁用状态 */
+    disabledDefault: {} as Record<string, boolean>,
+    /** 字段 → 初始选项列表 */
+    optionsDefault: {} as Record<string, Array<{ label: string; value: unknown }> | undefined>,
+    /** 字段 → 初始校验规则数组（深拷贝，REQUIRED 回退时使用） */
+    rulesDefault: {} as Record<string, Array<any>>,
+  };
+
+  /**
+   * 遍历 schema 树的所有节点（含容器节点和叶子字段），记录默认状态到快照
+   * @param items - 当前层级的 schema 数组
+   */
+  function snapshotDefaults(items: SchemaFormItem[]): void {
+    for (const item of items) {
+      /* 容器节点：记录可见性默认值 + 递归进入子层级 */
+      if (
+        item.type === SchemaNodeType.CONTAINER ||
+        item.type === "container"
+      ) {
+        if (item.field) {
+          defaultState.visibleDefault[item.field] = item.hidden !== true;
+        }
+        if (Array.isArray(item.children) && item.children.length > 0) {
+          snapshotDefaults(item.children);
+        }
+        continue;
+      }
+
+      /* 叶子字段：记录全部默认属性 */
+      if (item.field) {
+        defaultState.visibleDefault[item.field] = item.hidden !== true;
+        defaultState.disabledDefault[item.field] = !!item.disabled;
+        defaultState.optionsDefault[item.field] = item.options ? [...item.options] : undefined;
+        /* 记录初始校验规则（合并 required 自动生成 + 自定义 rules） */
+        const initialRules: any[] = [];
+        if (item.required === true) {
+          initialRules.push({ required: true, message: `${item.label}不能为空`, trigger: "blur" });
+        }
+        if (item.rules && Array.isArray(item.rules)) {
+          initialRules.push(...item.rules);
+        }
+        defaultState.rulesDefault[item.field] = initialRules;
+      }
+    }
+  }
+
+  /* 立即执行快照（基于原始 schema，尚未被联动修改） */
+  snapshotDefaults(options.schema);
+  console.log(
+    "[SchemaForm] [INFO] 默认状态快照已建立:",
+    Object.keys(defaultState.visibleDefault).join(", "),
+  );
+
+  /* ---------- 1.6 字段可见性字典（扁平响应式）---------- */
   const visibleFields = ref<Record<string, boolean>>({});
-  /* 初始化：根据 schema 中的 hidden 属性设置初始可见性（递归遍历所有叶子字段）*/
-  traverseLeafFields(options.schema, (item) => {
-    visibleFields.value[item.field] = !item.hidden;
-  });
+  /* 从默认状态快照初始化可见性（已包含容器节点和叶子字段） */
+  for (const [field, defaultVisible] of Object.entries(defaultState.visibleDefault)) {
+    visibleFields.value[field] = defaultVisible;
+  }
 
   /* ---------- 2. 表单模型初始化（支持嵌套路径） ----------
    * 遍历深拷贝后的 schema 树，为每个叶子字段设置初始值：
@@ -396,9 +486,37 @@ export function useSchemaForm(options: UseSchemaFormOptions): UseSchemaFormRetur
    * watchField 和 target field 均支持嵌套路径写法（如 "address.city"）
    */
   function evaluateLinkages(): void {
-    let evaluatedCount = 0; // 累计评估的规则总数
+    let evaluatedCount = 0;
 
     console.log("[schema-form] [联动] ====== 开始评估联动规则 ======");
+
+    /* ---- 步骤零：将所有联动控制的字段/容器重置为默认状态快照 ----
+     * 这样每轮评估都是幂等的：从干净基线开始，只应用当前条件满足的规则
+     * 不再依赖"对端规则反向隐藏"的手动对冲 */
+    for (const [field, defaultVisible] of Object.entries(defaultState.visibleDefault)) {
+      visibleFields.value[field] = defaultVisible;
+    }
+    for (const [field, defaultDisabled] of Object.entries(defaultState.disabledDefault)) {
+      /* 从 formSchemas 中找到对应字段并恢复 disabled 状态 */
+      const targetItem = findFieldInSchema(formSchemas.value, field);
+      if (targetItem) {
+        targetItem.disabled = defaultDisabled;
+      }
+    }
+    for (const [field, defaultOptions] of Object.entries(defaultState.optionsDefault)) {
+      const targetItem = findFieldInSchema(formSchemas.value, field);
+      if (targetItem) {
+        targetItem.options = defaultOptions ? [...defaultOptions] : undefined;
+      }
+    }
+    /* REQUIRED 回退：用快照中的初始规则覆盖 formRules */
+    for (const [field, defaultRules] of Object.entries(defaultState.rulesDefault)) {
+      if (defaultRules.length > 0) {
+        formRules.value[field] = JSON.parse(JSON.stringify(defaultRules));
+      } else {
+        delete formRules.value[field];
+      }
+    }
 
     /**
      * 递归评估某层级的所有字段的联动规则
@@ -406,11 +524,10 @@ export function useSchemaForm(options: UseSchemaFormOptions): UseSchemaFormRetur
      */
     function evaluateLevel(items: SchemaFormItem[]): void {
       for (const item of items) {
-        /* 判断是否为容器节点 */
+        /* 判断是否为容器节点（仅以 type 字段为准，不依赖 children 兜底） */
         const isContainer =
           item.type === SchemaNodeType.CONTAINER ||
-          item.type === "container" ||
-          (Array.isArray(item.children) && item.children.length > 0);
+          item.type === "container";
 
         if (isContainer && Array.isArray(item.children) && item.children.length > 0) {
           /* 容器节点：递归进入子层级 */
@@ -603,14 +720,8 @@ export function useSchemaForm(options: UseSchemaFormOptions): UseSchemaFormRetur
               }
             }
           }
-          /* ---- 条件不满足时的处理 ----
-           * 当前实现：对于 VISIBLE/DISABLED/OPTIONS 类型的动作，
-           * 条件为假时不做回退处理（保持上一次联动设置的最终状态）。
-           *
-           * 如需支持"恢复默认状态"功能，可在后续版本中引入 defaultState 快照机制：
-           *   - 在初始化时记录每个字段的原始 hidden/disabled/options 状态
-           *   - 条件为假时从快照中恢复对应属性
-           */
+          /* 条件不满足时无需处理：步骤零已将所有字段重置为默认状态，
+           * 只有条件满足的规则才会覆盖默认值 */
         }
       }
     }
@@ -733,17 +844,15 @@ export function useSchemaForm(options: UseSchemaFormOptions): UseSchemaFormRetur
       (formModel.value as any)[item.field] = resetValue;
     });
 
-    /* 委托给 el-form 实例清除校验状态（红色提示文字等） */
-    if (formRef.value?.resetFields) {
-      formRef.value.resetFields();
-    }
+    /* 清除校验状态（仅移除 error 提示，不改字段值）
+     * 不再调用 el-form 原生 resetFields()，因为它会将 model 还原到挂载时快照
+     * 会覆盖上面手动赋值的默认值（问题四修复） */
+    clearValidate();
 
-    /* 重置可见性字典：清除所有联动设置的显隐状态，恢复为 schema 声明的 hidden 属性 */
-    visibleFields.value = {};
-    /* 重新初始化：根据 schema 中每个叶子字段的 hidden 属性重建默认可见性 */
-    traverseLeafFields(formSchemas.value, (item) => {
-      visibleFields.value[item.field] = item.hidden !== true;
-    });
+    /* 重置可见性字典：从默认状态快照恢复（而非重新遍历 schema，保证与快照一致） */
+    for (const [field, defaultVisible] of Object.entries(defaultState.visibleDefault)) {
+      visibleFields.value[field] = defaultVisible;
+    }
 
     console.log("[schema-form] [INFO] 表单已重置，所有字段恢复默认值（含可见性字典）");
   }

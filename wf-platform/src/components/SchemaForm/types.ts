@@ -176,6 +176,20 @@ export interface LinkageRule {
   action: LinkageActionType;
 
   /**
+   * 联动动作的目标字段名（可选）
+   *
+   * 指定本条联动规则执行时实际作用于哪个字段。
+   * 若不填，则默认作用于规则所在的字段自身（即 item.field）。
+   *
+   * 【使用场景】
+   * - 跨字段联动：如 taskType 字段的联动规则控制 container-bugInfo 的显隐
+   * - 统一管理：将所有联动规则集中写在"监听源字段"上，通过 targetField 指向被控字段
+   *
+   * @example targetField: "container-bugInfo" — 控制 Bug 详情容器的可见性
+   */
+  targetField?: string;
+
+  /**
    * 动作参数，根据 action 类型的不同而具有不同的含义：
    *
    * | action 类型 | actionParams 类型 | 含义 |
@@ -514,6 +528,20 @@ export interface SchemaFormProps {
    * 这是联动 VISIBLE 动作生效的关键数据通道。
    */
   visibleFields?: import("vue").Ref<Record<string, boolean>>;
+
+  /**
+   * 外部传入的校验规则（可选，联动动态规则专用）
+   *
+   * 由 useSchemaForm composable 返回的 formRules，
+   * 包含了联动 REQUIRED 动作动态增删后的最新规则集。
+   *
+   * 若传入此项，el-form 的 :rules 将优先使用此数据源（而非组件内部从 schema 推导的 computedRules）。
+   * 这是联动 REQUIRED 动作生效的关键：useSchemaForm 内部维护 formRules 并随联动动态修改，
+   * 必须将这份响应式数据传入 el-form 才能让动态必填规则真正生效。
+   *
+   * 不传时 fallback 到组件内部计算的 computedRules（从 schema 的 rules/required 属性静态推导）。
+   */
+  formRules?: import("vue").Ref<Record<string, Array<any>>>;
 
   /**
    * 表单数据模型（v-model 双向绑定）
